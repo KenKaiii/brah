@@ -41,15 +41,10 @@ const callWaveCanvas = document.querySelector("#call-wave");
 const remoteAudioElement = document.querySelector("#remote-audio");
 const toolActivityElement = document.querySelector("#tool-activity");
 const toolActivityLabelElement = document.querySelector("#tool-activity-label");
-const toolActivityTargetElement = document.querySelector("#tool-activity-target");
-const toolActivityStopButton = document.querySelector("#tool-activity-stop");
 
 const stoppableTools = new Set(["computer_use_task"]);
 const toolActivityLabels = {
   computer_use_task: "Computer use running",
-};
-const toolActivityTargets = {
-  computer_use_task: "Browser",
 };
 
 let isOpenAIConnected = false;
@@ -68,6 +63,9 @@ let isCallActive = false;
 let agentProfile = normalizeAgentProfile(null);
 // Preferred microphone deviceId, or null to follow the system default.
 let selectedMicId = null;
+// While the welcome greeting plays we mute the mic so laptop speakers can't
+// echo it back and trigger a self-reply; this holds the safety-unmute timer.
+let welcomeMicGuardTimer = null;
 const realtimeToolHandler = createRealtimeToolHandler({
   executeTool: (name, args) => window.brah.executeRealtimeTool(name, args),
   sendEvent: sendRealtimeDataChannelEvent,
@@ -82,12 +80,18 @@ const realtimeToolHandler = createRealtimeToolHandler({
 // silence with the looping waiting ambience (fading in/out via waiting-sound).
 function handleToolStart(name) {
   showToolActivity(name);
-  waitingSound.start();
+  // Computer use has its own on-screen indicator (and can run for a long time),
+  // so only fill silence with the waiting ambience for normal quick tool calls.
+  if (!stoppableTools.has(name)) {
+    waitingSound.start();
+  }
 }
 
 function handleToolEnd(name) {
   hideToolActivity(name);
-  waitingSound.stop();
+  if (!stoppableTools.has(name)) {
+    waitingSound.stop();
+  }
 }
 
 function showToolActivity(name) {
@@ -95,13 +99,13 @@ function showToolActivity(name) {
     return;
   }
   toolActivityLabelElement.textContent = toolActivityLabels[name] ?? "Working…";
-  toolActivityTargetElement.textContent = toolActivityTargets[name] ?? "System";
-  toolActivityStopButton.disabled = false;
-  toolActivityStopButton.textContent = "End";
   toolActivityElement.hidden = false;
   appShellElement.dataset.toolActivity = "active";
   if (panelController.isOpen()) {
-    void panelController.close({ windowMode: "call" });
+    // Hide the panel synchronously before the window shrinks to the pill so the
+    // 440-wide panel content isn't squished into the 226x52 frame mid-resize
+    // (which made the computer-use container look deformed).
+    void panelController.close({ immediate: true, windowMode: "call" });
   } else {
     void setWindowMode("call");
   }
@@ -119,9 +123,7 @@ function hideToolActivity(name) {
 }
 
 async function stopComputerUse() {
-  toolActivityStopButton.disabled = true;
-  toolActivityStopButton.textContent = "Ending…";
-  toolActivityLabelElement.textContent = "Ending…";
+  toolActivityLabelElement.textContent = "Stopping…";
   try {
     await window.brah.cancelComputerUse();
   } catch (error) {
@@ -523,6 +525,10 @@ async function stopCall() {
     hangupFallbackTimer = null;
   }
   pendingHangup = false;
+  if (welcomeMicGuardTimer !== null) {
+    clearTimeout(welcomeMicGuardTimer);
+    welcomeMicGuardTimer = null;
+  }
   playbackTracker.reset();
   responseCoordinator.reset();
   waitingSound.reset();
@@ -538,6 +544,10 @@ async function stopCall() {
 
 async function handleRealtimeEvent(event) {
   playbackTracker.observe(event);
+  // The welcome greeting finished playing through the speakers — safe to listen.
+  if (welcomeMicGuardTimer !== null && event.type === "output_audio_buffer.stopped") {
+    endWelcomeMicGuard();
+  }
   const queuedCreate = responseCoordinator.observe(event);
   if (queuedCreate) {
     // The active response just ended; release the create we queued earlier.
@@ -761,6 +771,11 @@ async function switchMicrophone() {
 }
 
 function sendRealtimeWelcome() {
+  // Laptop speakers echo the greeting into the mic and (even with echo
+  // cancellation) the eager semantic VAD hears it as a user turn, making the
+  // model reply to itself. Mute the mic for the greeting — no user input is
+  // expected during it — and unmute once its audio finishes playing.
+  beginWelcomeMicGuard();
   sendRealtimeDataChannelEvent({
     type: "response.create",
     response: {
@@ -768,6 +783,33 @@ function sendRealtimeWelcome() {
       instructions: buildWelcomeInstructions(agentProfile),
     },
   });
+}
+
+function beginWelcomeMicGuard() {
+  setMicrophoneMuted(true);
+  if (welcomeMicGuardTimer !== null) {
+    clearTimeout(welcomeMicGuardTimer);
+  }
+  // Safety net: never leave the mic muted if the audio-stopped event is missed.
+  welcomeMicGuardTimer = setTimeout(endWelcomeMicGuard, 12000);
+}
+
+function endWelcomeMicGuard() {
+  if (welcomeMicGuardTimer === null) {
+    return;
+  }
+  clearTimeout(welcomeMicGuardTimer);
+  welcomeMicGuardTimer = null;
+  setMicrophoneMuted(false);
+}
+
+function setMicrophoneMuted(muted) {
+  if (!localStream) {
+    return;
+  }
+  for (const track of localStream.getAudioTracks()) {
+    track.enabled = !muted;
+  }
 }
 
 function sendRealtimeDataChannelEvent(event) {
@@ -1099,10 +1141,13 @@ initClickSound();
 callToggleButton.addEventListener("click", toggleCall);
 headerCallButton.addEventListener("click", toggleCall);
 callEndButton.addEventListener("click", () => {
-  void stopCall();
-});
-toolActivityStopButton.addEventListener("click", () => {
-  void stopComputerUse();
+  // Same button, context-aware: during computer use it stops the task and keeps
+  // the call going; otherwise it ends the call.
+  if (appShellElement.dataset.toolActivity === "active") {
+    void stopComputerUse();
+  } else {
+    void stopCall();
+  }
 });
 micSelectElement.addEventListener("change", () => {
   void handleMicSelection();

@@ -146,6 +146,7 @@
         <nav id="panel-tabs" class="panel-tabs" role="tablist" aria-label="Activity tabs"></nav>
         <div id="panel-body" class="panel-body" role="tabpanel"></div>
         <footer id="panel-footer" class="panel-footer">
+          <span id="panel-footer-text" class="panel-footer-text"></span>
           <label class="mic-picker">
             <svg
               class="mic-picker-icon"
@@ -202,17 +203,10 @@
           <span>End</span>
         </button>
         <div id="tool-activity" class="cu-card" hidden role="status" aria-live="polite">
-          <div class="cu-head">
-            <span class="cu-icon" aria-hidden="true"></span>
-            <span class="cu-title">Computer use</span>
-            <span id="tool-activity-target" class="cu-target">Browser</span>
-          </div>
           <div class="cu-status-row">
             <span class="tool-activity-pulse" aria-hidden="true"></span>
             <span id="tool-activity-label" class="tool-activity-label">Working…</span>
           </div>
-          <div class="cu-track"><span class="cu-track-fill"></span></div>
-          <button id="tool-activity-stop" type="button" class="tool-activity-stop">End</button>
         </div>
       </div>
       <audio id="remote-audio" autoplay aria-label="Realtime assistant audio">

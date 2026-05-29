@@ -774,6 +774,11 @@ button {
 }
 
 .panel-footer-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--text-3);
   font-size: 0.62rem;
   letter-spacing: 0.04em;
@@ -1219,6 +1224,10 @@ button {
   background:
     radial-gradient(180px circle at 50% 24%, rgba(129, 140, 248, 0.16), transparent 62%),
     radial-gradient(160px circle at 78% 62%, rgba(89, 217, 196, 0.11), transparent 64%);
+  /* Purely decorative: never let the overlay capture clicks. While invisible
+     (opacity:0) it would otherwise still intercept pointer events, which ate
+     clicks on nested controls like the computer-use End button. */
+  pointer-events: none;
   opacity: 0;
   transform: scale(0.96);
   transition:
@@ -1228,6 +1237,15 @@ button {
 }
 
 .call-stage > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* The computer-use card uses display:contents, so its children act as
+   call-stage items but don't match `.call-stage > *`. Give them the same
+   stacking as the call's direct children so they sit above the ::before
+   overlay and stay clickable (matching the call End button). */
+.cu-card > * {
   position: relative;
   z-index: 1;
 }
@@ -1537,12 +1555,19 @@ button {
   display: none;
 }
 
+/* During computer use we reuse the call's own End button (it stops the task
+   instead of hanging up), so it stays visible — only the waveform/meta swap out
+   for the status label. This keeps the pill's exact layout. */
 .app-shell[data-tool-activity="active"] .call-meta,
 .app-shell[data-tool-activity="active"] .fab-orb,
 .app-shell[data-tool-activity="active"] .call-wave,
-.app-shell[data-tool-activity="active"] .status,
-.app-shell[data-tool-activity="active"] .call-end {
+.app-shell[data-tool-activity="active"] .status {
   display: none;
+}
+
+/* The status label occupies the waveform's slot, to the left of the End button. */
+.cu-status-row {
+  order: -1;
 }
 
 /* ---------- Panel mode: the header Call button replaces the docked orb ---------- */

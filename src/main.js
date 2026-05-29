@@ -96,6 +96,8 @@ let activeComputerUseController = null;
 let userWindowPosition = null;
 let suppressMoveSave = false;
 let moveSaveTimer = null;
+// Set while we resize the window ourselves, so the resize guard ignores it.
+let suppressBoundsGuard = false;
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -103,6 +105,8 @@ function createMainWindow() {
     height: windowModes.panel.height,
     minWidth: windowModes.panel.width,
     minHeight: windowModes.panel.height,
+    maxWidth: windowModes.panel.width,
+    maxHeight: windowModes.panel.height,
     frame: false,
     transparent: true,
     resizable: false,
@@ -123,6 +127,10 @@ function createMainWindow() {
   // Persist the position whenever the user drags the panel so it is restored on
   // the next launch. Programmatic moves (mode switches) are suppressed.
   mainWindow.on("move", handleWindowMove);
+  // macOS auto-resizes this frameless, transparent window during screen capture
+  // (desktopCapturer.getSources), ignoring even maxSize — it stretched the
+  // computer-use pill to ~84px. Snap any unexpected resize back to the mode size.
+  mainWindow.on("resize", enforceModeBounds);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -152,15 +160,42 @@ function handleWindowMove() {
   }, 400);
 }
 
-// Applies bounds without recording them as a user-initiated move.
+// Applies bounds without recording them as a user-initiated move or tripping the
+// resize guard.
 function applyWindowBounds(bounds) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
   suppressMoveSave = true;
+  suppressBoundsGuard = true;
   mainWindow.setBounds(bounds, false);
   setImmediate(() => {
     suppressMoveSave = false;
+    suppressBoundsGuard = false;
+  });
+}
+
+// Reverts any externally-driven resize (e.g. macOS during screen capture) back
+// to the current mode's exact size, keeping the window's current position.
+function enforceModeBounds() {
+  if (suppressBoundsGuard || !mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  const expected = windowModes[windowMode];
+  if (!expected) {
+    return;
+  }
+  const bounds = mainWindow.getBounds();
+  if (bounds.width === expected.width && bounds.height === expected.height) {
+    return;
+  }
+  suppressBoundsGuard = true;
+  mainWindow.setBounds(
+    { x: bounds.x, y: bounds.y, width: expected.width, height: expected.height },
+    false,
+  );
+  setImmediate(() => {
+    suppressBoundsGuard = false;
   });
 }
 
@@ -185,7 +220,11 @@ async function setMainWindowMode(mode) {
   if (sizeChanged) {
     await fadeMainWindowTo(0, 110);
   }
+  // Pin BOTH min and max to the mode size. This frameless, transparent window
+  // is otherwise auto-grown by macOS during screen capture (it stretched the
+  // computer-use pill to ~84px tall); locking max prevents any such resize.
   mainWindow.setMinimumSize(targetBounds.width, targetBounds.height);
+  mainWindow.setMaximumSize(targetBounds.width, targetBounds.height);
   applyWindowBounds(targetBounds);
   if (sizeChanged) {
     await fadeMainWindowTo(1, 130);

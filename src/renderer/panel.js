@@ -82,7 +82,7 @@ export function createPanelController({ brah, onModeChange } = {}) {
 
   function setLoading() {
     mountBody(buildEmptyState("Loading…", ""));
-    footerElement.textContent = "";
+    setFooter("");
   }
 
   function renderError(error) {
@@ -366,7 +366,9 @@ export function createPanelController({ brah, onModeChange } = {}) {
   }
 
   function setFooter(text) {
-    footerElement.textContent = text;
+    if (footerElement) {
+      footerElement.textContent = text;
+    }
   }
 
   function formatTime(value) {
