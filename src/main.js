@@ -25,13 +25,33 @@ import {
   isKnownOsPermissionId,
 } from "./os-permissions.js";
 import { buildRealtimeInstructions } from "./realtime/prompts.js";
-import { listActivity, recordActivity } from "./realtime/tools/activity-store.js";
+import {
+  listActivity,
+  migrateLegacyActivityStore,
+  recordActivity,
+} from "./realtime/tools/activity-store.js";
+import { setDatabaseUserDataPath } from "./realtime/tools/database.js";
 import { executeRealtimeTool, getRealtimeToolDefinitions } from "./realtime/tools/index.js";
-import { listCalendarItems, listTasks } from "./realtime/tools/planner-store.js";
+import {
+  listCalendarItems,
+  listTasks,
+  migrateLegacyPlannerStore,
+} from "./realtime/tools/planner-store.js";
 
 const { autoUpdater } = electronUpdater;
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
+
+// When the launching terminal/parent closes the stdout/stderr pipe, console
+// writes raise EPIPE. Without a listener Node turns that into an uncaught
+// exception that kills the app, so swallow broken-pipe errors on both streams.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on?.("error", (error) => {
+    if (error?.code !== "EPIPE" && error?.code !== "ERR_STREAM_DESTROYED") {
+      throw error;
+    }
+  });
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDevelopment = !app.isPackaged;
@@ -244,6 +264,13 @@ ipcMain.handle("window:set-focusable", (_event, focusable) => {
   mainWindow.setFocusable(Boolean(focusable));
   return Boolean(focusable);
 });
+ipcMain.handle("window:minimize", () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return false;
+  }
+  mainWindow.minimize();
+  return true;
+});
 ipcMain.handle("permissions:get-status", async () => getOsPermissionStatus());
 ipcMain.handle("permissions:request", async (_event, id) => requestOsPermission(id));
 ipcMain.handle("permissions:open-settings", async (_event, id) => openOsPermissionSettings(id));
@@ -344,6 +371,7 @@ function cancelComputerUse() {
 }
 
 app.whenReady().then(() => {
+  initializeDataStore();
   wireUpdateEvents();
   createMainWindow();
 
@@ -354,6 +382,12 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
+      return;
+    }
+    // Reopening from the Dock should restore a minimized companion window.
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isMinimized()) {
+      mainWindow.restore();
+      mainWindow.show();
     }
   });
 });
@@ -363,6 +397,16 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+function initializeDataStore() {
+  setDatabaseUserDataPath(app.getPath("userData"));
+  try {
+    migrateLegacyPlannerStore();
+    migrateLegacyActivityStore();
+  } catch (error) {
+    safeConsole("warn", "Legacy store migration failed", error);
+  }
+}
 
 function getDiagnosticLogPath() {
   return path.join(app.getPath("userData"), "diagnostics.log");
@@ -500,9 +544,19 @@ async function writeDiagnosticLog(event, details = {}) {
     await fs.mkdir(path.dirname(getDiagnosticLogPath()), { recursive: true });
     await fs.appendFile(getDiagnosticLogPath(), line);
   } catch (error) {
-    console.error("diagnostic log write failed", error);
+    safeConsole("error", "diagnostic log write failed", error);
   }
-  console.info("diagnostic", event, details);
+  safeConsole("info", "diagnostic", event, details);
+}
+
+function safeConsole(level, ...args) {
+  try {
+    console[level](...args);
+  } catch (error) {
+    if (error?.code !== "EPIPE" && error?.code !== "ERR_STREAM_DESTROYED") {
+      throw error;
+    }
+  }
 }
 
 function createToolLogger(tool) {

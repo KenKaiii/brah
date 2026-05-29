@@ -113,7 +113,6 @@ button {
 
 .permissions-panel,
 .panel,
-.orb-expand,
 .fab-orb,
 .call-end,
 .cu-card {
@@ -259,6 +258,59 @@ button {
   box-shadow: 0 0 8px rgba(110, 231, 183, 0.75);
 }
 
+/* ---------- Header call control ---------- */
+.header-call {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: linear-gradient(180deg, #7c8cff, #5b6cf0);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 6px 16px rgba(91, 108, 240, 0.35);
+  cursor: pointer;
+  font-family: "Space Grotesk", Geist, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition:
+    background var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out),
+    opacity var(--dur) var(--ease-out);
+}
+
+.header-call:hover:not(:disabled) {
+  background: linear-gradient(180deg, #8b99ff, #6a7af5);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 8px 20px rgba(91, 108, 240, 0.45);
+}
+
+.header-call:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.header-call:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.header-call.is-active {
+  background: linear-gradient(180deg, #fb7185, #ef4358);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 6px 16px rgba(239, 67, 88, 0.4);
+}
+
+.header-call.is-active:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fc8194, #f1576a);
+}
+
 /* ---------- Dropdown menu ---------- */
 .app-menu {
   position: absolute;
@@ -316,37 +368,6 @@ button {
   color: var(--text-3);
 }
 
-/* ---------- Orb expand (collapsed mode) ---------- */
-.orb-expand {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  z-index: 6;
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  transform: translateX(-50%);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
-  background: rgba(10, 11, 16, 0.66);
-  backdrop-filter: blur(14px);
-  cursor: pointer;
-  transition:
-    border-color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out);
-}
-
-.orb-expand:hover {
-  border-color: rgba(129, 140, 248, 0.42);
-  background: rgba(10, 11, 16, 0.82);
-}
-
-.app-shell[data-panel="open"] .orb-expand {
-  display: none;
-}
-
 /* ---------- Tabs (segmented control) ---------- */
 .panel-tabs {
   display: flex;
@@ -390,6 +411,7 @@ button {
 /* ---------- Body ---------- */
 .panel-body {
   flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 6px 11px 14px;
 }
@@ -466,6 +488,7 @@ button {
 .panel-row-block {
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
 }
 
 .panel-row-content {
@@ -488,19 +511,23 @@ button {
 .panel-row-title {
   position: relative;
   z-index: 1;
+  min-width: 0;
   color: var(--text);
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
 }
 
 .panel-row-subtext {
   position: relative;
   z-index: 1;
+  min-width: 0;
   margin: 4px 0 0;
   color: var(--text-2);
   font-size: 0.71rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .panel-row-url {
@@ -1082,7 +1109,7 @@ button {
   gap: 7px;
   padding: 7px;
   border-color: transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-window);
   background: linear-gradient(180deg, rgba(21, 23, 31, 0.94), rgba(9, 10, 15, 0.96));
   box-shadow: none;
   backdrop-filter: blur(18px) saturate(1.15);
@@ -1370,14 +1397,9 @@ button {
   display: none;
 }
 
-/* ---------- Orb docked in panel mode ---------- */
+/* ---------- Panel mode: the header Call button replaces the docked orb ---------- */
 .app-shell[data-panel="open"]:not([data-call="active"]) .fab-orb {
-  position: absolute;
-  right: 16px;
-  bottom: 14px;
-  width: 60px;
-  height: 60px;
-  z-index: 6;
+  display: none;
 }
 
 .app-shell[data-panel="open"]:not([data-call="active"]) .siri-orb {
@@ -1388,10 +1410,6 @@ button {
 .app-shell[data-panel="open"]:not([data-call="active"]) .orb-shadow {
   width: 50px;
   height: 50px;
-}
-
-.app-shell[data-call="active"] .orb-expand {
-  display: none;
 }
 
 .app-shell[data-panel="open"]:not([data-call="active"]) .status {

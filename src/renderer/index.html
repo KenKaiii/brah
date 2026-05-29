@@ -35,6 +35,15 @@
           <span id="openai-indicator" class="openai-indicator" data-connected="false"
             >Offline</span
           >
+          <button
+            id="header-call"
+            type="button"
+            class="header-call"
+            disabled
+            aria-pressed="false"
+          >
+            <span id="header-call-label">Call</span>
+          </button>
         </header>
         <div id="app-menu" class="app-menu" hidden role="menu" aria-label="Brah menu">
           <button id="connect-openai" type="button" class="menu-item" role="menuitem">
@@ -43,15 +52,8 @@
           <button id="permissions-toggle" type="button" class="menu-item" role="menuitem">
             Permissions
           </button>
-          <button
-            id="panel-toggle"
-            type="button"
-            class="menu-item"
-            role="menuitem"
-            data-panel-toggle
-            aria-pressed="true"
-          >
-            Collapse to orb
+          <button id="window-minimize" type="button" class="menu-item" role="menuitem">
+            Minimize
           </button>
         </div>
         <section
@@ -74,15 +76,6 @@
         <div id="panel-body" class="panel-body" role="tabpanel"></div>
         <footer id="panel-footer" class="panel-footer"></footer>
       </section>
-      <button
-        id="orb-expand"
-        type="button"
-        class="orb-expand"
-        data-panel-toggle
-        aria-label="Open panel"
-      >
-        <span class="menu-glyph" aria-hidden="true"></span>
-      </button>
       <div id="call-stage" class="call-stage">
         <div id="call-meta" class="call-meta" aria-hidden="true">
           <span class="call-live"></span>

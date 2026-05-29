@@ -9,13 +9,15 @@ import {
   loadActivityState,
   recordActivity,
 } from "../src/realtime/tools/activity-store.js";
+import { closeDatabase } from "../src/realtime/tools/database.js";
 
 async function withActivityFile(callback) {
   const directory = await mkdtemp(path.join(tmpdir(), "brah-activity-"));
-  const filePath = path.join(directory, "activity", "log.json");
+  const filePath = path.join(directory, "activity", "log.db");
   try {
     await callback(filePath);
   } finally {
+    closeDatabase(filePath);
     await rm(directory, { force: true, recursive: true });
   }
 }

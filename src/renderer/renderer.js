@@ -1,4 +1,5 @@
 import { createPanelController } from "./panel.js";
+import { createRealtimePlaybackTracker, isBenignCancelError } from "./realtime-playback.js";
 import { createRealtimeToolHandler } from "./realtime-tool-handler.js";
 
 const appShellElement = document.querySelector("#app-shell");
@@ -8,12 +9,15 @@ const menuToggleButton = document.querySelector("#menu-toggle");
 const appMenuElement = document.querySelector("#app-menu");
 const openAIIndicatorElement = document.querySelector("#openai-indicator");
 const permissionsToggleButton = document.querySelector("#permissions-toggle");
+const windowMinimizeButton = document.querySelector("#window-minimize");
 const permissionsPanelElement = document.querySelector("#permissions-panel");
 const permissionsBackButton = document.querySelector("#permissions-back");
 const permissionsRefreshButton = document.querySelector("#permissions-refresh");
 const diagnosticsOpenButton = document.querySelector("#diagnostics-open");
 const permissionsListElement = document.querySelector("#permissions-list");
 const callToggleButton = document.querySelector("#call-toggle");
+const headerCallButton = document.querySelector("#header-call");
+const headerCallLabelElement = document.querySelector("#header-call-label");
 const callLabelElement = document.querySelector("#call-label");
 const callEndButton = document.querySelector("#call-end");
 const callTimerElement = document.querySelector("#call-timer");
@@ -39,6 +43,7 @@ let localStream = null;
 let audioLevelMonitor = null;
 let pendingHangup = false;
 let hangupFallbackTimer = null;
+const playbackTracker = createRealtimePlaybackTracker();
 let callTimerInterval = null;
 let callStartedAt = 0;
 let isCallActive = false;
@@ -133,6 +138,7 @@ function setOpenAIConnected(connected) {
   openAIIndicatorElement.textContent = connected ? "Connected" : "Offline";
   openAIIndicatorElement.dataset.connected = String(connected);
   callToggleButton.disabled = !connected;
+  headerCallButton.disabled = !connected;
   appShellElement.classList.toggle("is-authorized", connected);
   if (!connected) {
     setMode("idle");
@@ -147,6 +153,9 @@ function setCallActive(active, { inactiveWindowMode = "panel" } = {}) {
   isCallActive = active;
   callToggleButton.classList.toggle("is-active", active);
   callToggleButton.setAttribute("aria-pressed", String(active));
+  headerCallButton.classList.toggle("is-active", active);
+  headerCallButton.setAttribute("aria-pressed", String(active));
+  headerCallLabelElement.textContent = active ? "End" : "Call";
   callLabelElement.textContent = active ? "End" : "Call";
   callEndButton.disabled = !active;
   callEndButton.tabIndex = active ? 0 : -1;
@@ -288,6 +297,7 @@ async function openOsPermissionSettings(id) {
 async function connectOpenAI() {
   connectOpenAIButton.disabled = true;
   callToggleButton.disabled = true;
+  headerCallButton.disabled = true;
   setStatus(isOpenAIConnected ? "Reconnecting…" : "Opening browser…");
   setMode("connecting");
 
@@ -307,6 +317,7 @@ async function connectOpenAI() {
   } finally {
     connectOpenAIButton.disabled = false;
     callToggleButton.disabled = !isOpenAIConnected;
+    headerCallButton.disabled = !isOpenAIConnected;
   }
 }
 
@@ -326,10 +337,13 @@ async function startCall() {
   }
 
   callToggleButton.disabled = true;
-  setCallActive(true);
+  headerCallButton.disabled = true;
+  // Hide the panel instantly (no fade) before resizing so the UI just
+  // disappears rather than morphing through a circle into the call pill.
   if (panelController.isOpen()) {
-    await panelController.close({ windowMode: "call" });
+    await panelController.close({ immediate: true, skipWindowMode: true });
   }
+  setCallActive(true);
   setStatus("Starting…");
   setMode("connecting");
   await writeRendererDiagnostic("call.start", {
@@ -414,6 +428,7 @@ async function startCall() {
     await stopCall();
   } finally {
     callToggleButton.disabled = !isOpenAIConnected;
+    headerCallButton.disabled = !isOpenAIConnected;
   }
 }
 
@@ -444,6 +459,7 @@ async function stopCall() {
     hangupFallbackTimer = null;
   }
   pendingHangup = false;
+  playbackTracker.reset();
 
   realtimeToolHandler.reset();
   hideToolActivity();
@@ -455,10 +471,14 @@ async function stopCall() {
 }
 
 async function handleRealtimeEvent(event) {
+  playbackTracker.observe(event);
   if (await realtimeToolHandler.handleEvent(event)) {
     return;
   }
   if (event.type === "input_audio_buffer.speech_started") {
+    // Ken started talking: cut off any assistant audio immediately rather than
+    // waiting for the server VAD round-trip, then return to listening.
+    interruptAssistantPlayback();
     setStatus("Listening");
     setMode("listening");
     return;
@@ -478,8 +498,29 @@ async function handleRealtimeEvent(event) {
     return;
   }
   if (event.type === "error") {
+    // A benign "no active response to cancel" can occur when our manual barge-in
+    // races the server VAD's own interrupt; don't surface it as a call error.
+    if (isBenignCancelError(event.error)) {
+      void writeRendererDiagnostic("realtime.cancel.benign", { code: event.error?.code });
+      return;
+    }
     setStatus(event.error?.message ?? "Realtime error");
     setMode("idle");
+  }
+}
+
+function interruptAssistantPlayback() {
+  const events = playbackTracker.interrupt();
+  if (events.length === 0) {
+    return;
+  }
+  // Per the OpenAI Realtime WebRTC contract: cancel the in-progress response,
+  // then clear the already-buffered output audio so playback stops at once.
+  void writeRendererDiagnostic("realtime.barge_in", {
+    events: events.map((event) => event.type),
+  });
+  for (const event of events) {
+    sendRealtimeDataChannelEvent(event);
   }
 }
 
@@ -769,6 +810,10 @@ permissionsToggleButton.addEventListener("click", () => {
     void refreshOsPermissions();
   }
 });
+windowMinimizeButton.addEventListener("click", () => {
+  setMenuOpen(false);
+  void window.brah.minimizeWindow();
+});
 permissionsBackButton.addEventListener("click", () => {
   permissionsPanelElement.hidden = true;
 });
@@ -787,6 +832,7 @@ const panelController = createPanelController({
 panelController.init({ openByDefault: true });
 
 callToggleButton.addEventListener("click", toggleCall);
+headerCallButton.addEventListener("click", toggleCall);
 callEndButton.addEventListener("click", () => {
   void stopCall();
 });

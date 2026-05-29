@@ -1,69 +1,136 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { getDatabase, getDatabasePath, migrateLegacyStores } from "./database.js";
 
-const storageVersion = 1;
 const maxEntriesPerKind = 50;
 const maxTextExcerpt = 600;
 const activityKinds = Object.freeze(["web_search", "web_fetch", "computer_use"]);
 
 export function getActivityStorePath() {
-  return path.join(getUserDataPath(), "activity", "log.json");
+  return getDatabasePath();
 }
 
-export async function recordActivity(entry, storePath = getActivityStorePath()) {
+export function recordActivity(entry, storePath = getActivityStorePath()) {
   const normalized = normalizeEntry(entry);
   if (!normalized) {
     return null;
   }
-  const state = await loadActivityState(storePath);
-  const entries = [normalized, ...state.entries].slice(0, maxEntriesPerKind * activityKinds.length);
-  const capped = capByKind(entries);
-  await saveActivityState({ entries: capped }, storePath);
+  const db = getDatabase(storePath);
+  const { id, kind, time, ...rest } = normalized;
+  db.exec("BEGIN");
+  try {
+    db.prepare("INSERT OR REPLACE INTO activity (id, kind, time, data) VALUES (?, ?, ?, ?)").run(
+      id,
+      kind,
+      time,
+      JSON.stringify(rest),
+    );
+    db.prepare(
+      `DELETE FROM activity
+       WHERE kind = ?
+         AND seq NOT IN (
+           SELECT seq FROM activity WHERE kind = ? ORDER BY time DESC, seq DESC LIMIT ?
+         )`,
+    ).run(kind, kind, maxEntriesPerKind);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
   return normalized;
 }
 
-export async function listActivity(kind, storePath = getActivityStorePath()) {
-  const state = await loadActivityState(storePath);
-  const sorted = [...state.entries].sort((a, b) => b.time.localeCompare(a.time));
-  if (typeof kind === "string" && kind.trim()) {
-    return sorted.filter((entry) => entry.kind === kind.trim());
-  }
-  return sorted;
+export function listActivity(kind, storePath = getActivityStorePath()) {
+  const db = getDatabase(storePath);
+  const trimmedKind = typeof kind === "string" && kind.trim() ? kind.trim() : null;
+  const rows = trimmedKind
+    ? db
+        .prepare(
+          "SELECT id, kind, time, data FROM activity WHERE kind = ? ORDER BY time DESC, seq DESC",
+        )
+        .all(trimmedKind)
+    : db.prepare("SELECT id, kind, time, data FROM activity ORDER BY time DESC, seq DESC").all();
+  return rows.map(rowToEntry).filter(Boolean);
 }
 
-export async function loadActivityState(storePath = getActivityStorePath()) {
-  try {
-    const raw = await fs.readFile(storePath, "utf8");
-    if (!raw.trim()) {
-      return emptyActivityState();
-    }
-    return normalizeActivityState(JSON.parse(raw));
-  } catch (error) {
-    if (error?.code !== "ENOENT") {
-      console.warn("Failed to load activity state", error);
-    }
-    return emptyActivityState();
-  }
+export function loadActivityState(storePath = getActivityStorePath()) {
+  return { entries: listActivity(undefined, storePath) };
 }
 
-export async function saveActivityState(state, storePath = getActivityStorePath()) {
-  await fs.mkdir(path.dirname(storePath), { recursive: true });
-  await fs.writeFile(
-    storePath,
-    JSON.stringify(
-      {
-        version: storageVersion,
-        entries: capByKind(state.entries.map(normalizeEntry).filter(Boolean)),
-      },
-      null,
-      2,
-    ),
+export function saveActivityState(state, storePath = getActivityStorePath()) {
+  const db = getDatabase(storePath);
+  const entries = capByKind((state.entries ?? []).map(normalizeEntry).filter(Boolean));
+  const insert = db.prepare(
+    "INSERT OR REPLACE INTO activity (id, kind, time, data) VALUES (?, ?, ?, ?)",
   );
+  db.exec("BEGIN");
+  try {
+    db.exec("DELETE FROM activity");
+    for (const entry of entries) {
+      const { id, kind, time, ...rest } = entry;
+      insert.run(id, kind, time, JSON.stringify(rest));
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 export function emptyActivityState() {
   return { entries: [] };
+}
+
+// Imports the legacy activity/log.json file (from userData or the old tmp dir)
+// into SQLite, skipping ids that already exist and re-capping per kind.
+export function migrateLegacyActivityStore(dbPath = getActivityStorePath()) {
+  migrateLegacyStores(
+    [
+      {
+        relativePath: "activity/log.json",
+        apply(db, parsed) {
+          if (!isRecord(parsed) || !Array.isArray(parsed.entries)) {
+            return;
+          }
+          const insert = db.prepare(
+            "INSERT OR IGNORE INTO activity (id, kind, time, data) VALUES (?, ?, ?, ?)",
+          );
+          for (const raw of parsed.entries) {
+            const entry = normalizeEntry(raw);
+            if (!entry) {
+              continue;
+            }
+            const { id, kind, time, ...rest } = entry;
+            insert.run(id, kind, time, JSON.stringify(rest));
+          }
+          for (const kind of activityKinds) {
+            db.prepare(
+              `DELETE FROM activity
+               WHERE kind = ?
+                 AND seq NOT IN (
+                   SELECT seq FROM activity WHERE kind = ? ORDER BY time DESC, seq DESC LIMIT ?
+                 )`,
+            ).run(kind, kind, maxEntriesPerKind);
+          }
+        },
+      },
+    ],
+    dbPath,
+  );
+}
+
+function rowToEntry(row) {
+  if (!isRecord(row)) {
+    return null;
+  }
+  let rest = {};
+  try {
+    const parsed = JSON.parse(row.data);
+    if (isRecord(parsed)) {
+      rest = parsed;
+    }
+  } catch {
+    rest = {};
+  }
+  return { id: row.id, kind: row.kind, time: row.time, ...rest };
 }
 
 function capByKind(entries) {
@@ -78,13 +145,6 @@ function capByKind(entries) {
     kept.push(entry);
   }
   return kept;
-}
-
-function normalizeActivityState(value) {
-  if (!isRecord(value) || !Array.isArray(value.entries)) {
-    return emptyActivityState();
-  }
-  return { entries: value.entries.map(normalizeEntry).filter(Boolean) };
 }
 
 function normalizeEntry(value) {
@@ -142,20 +202,6 @@ function clampText(value, max) {
 
 function createActivityId() {
   return `activity-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function getUserDataPath() {
-  if (globalThis.process?.type) {
-    try {
-      const electronApp = globalThis.require?.("electron")?.app;
-      if (electronApp?.getPath) {
-        return electronApp.getPath("userData");
-      }
-    } catch {
-      // Fall through to the deterministic Node test/runtime path.
-    }
-  }
-  return path.join(os.tmpdir(), "brah-user-data");
 }
 
 function isRecord(value) {

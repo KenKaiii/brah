@@ -1,6 +1,9 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import {
+  getDatabase,
+  getDatabasePath,
+  migrateLegacyStores,
+  setDatabaseUserDataPath,
+} from "./database.js";
 import {
   createFallbackPlannerId,
   createPlannerCalendarItem,
@@ -15,66 +18,76 @@ import {
   normalizeTaskStatus,
 } from "./planner-items.js";
 
-const storageVersion = 1;
+export { setDatabaseUserDataPath };
 
 export function getPlannerStorePath() {
-  return path.join(getUserDataPath(), "planner", "items.json");
+  return getDatabasePath();
 }
 
-export async function loadPlannerState(storePath = getPlannerStorePath()) {
+export function loadPlannerState(storePath = getPlannerStorePath()) {
+  const db = getDatabase(storePath);
+  return {
+    tasks: db
+      .prepare("SELECT id, name, description, priority, status FROM tasks ORDER BY seq")
+      .all()
+      .map(normalizeStoredTask),
+    calendarItems: db
+      .prepare("SELECT id, title, description, date, time FROM calendar_items ORDER BY seq")
+      .all()
+      .map(normalizeStoredCalendarItem),
+  };
+}
+
+export function savePlannerState(state, storePath = getPlannerStorePath()) {
+  const db = getDatabase(storePath);
+  const tasks = (state.tasks ?? []).map(normalizeStoredTask);
+  const calendarItems = (state.calendarItems ?? []).map(normalizeStoredCalendarItem);
+  const insertTask = db.prepare(
+    "INSERT OR REPLACE INTO tasks (id, name, description, priority, status) VALUES (?, ?, ?, ?, ?)",
+  );
+  const insertCalendar = db.prepare(
+    "INSERT OR REPLACE INTO calendar_items (id, title, description, date, time) VALUES (?, ?, ?, ?, ?)",
+  );
+  db.exec("BEGIN");
   try {
-    const raw = await fs.readFile(storePath, "utf8");
-    if (!raw.trim()) {
-      return emptyPlannerState();
+    db.exec("DELETE FROM tasks; DELETE FROM calendar_items;");
+    for (const task of tasks) {
+      insertTask.run(task.id, task.name, task.description, task.priority, task.status);
     }
-    return normalizePlannerState(JSON.parse(raw));
+    for (const item of calendarItems) {
+      insertCalendar.run(item.id, item.title, item.description, item.date, item.time);
+    }
+    db.exec("COMMIT");
   } catch (error) {
-    if (error?.code !== "ENOENT") {
-      console.warn("Failed to load planner state", error);
-    }
-    return emptyPlannerState();
+    db.exec("ROLLBACK");
+    throw error;
   }
 }
 
-export async function savePlannerState(state, storePath = getPlannerStorePath()) {
-  await fs.mkdir(path.dirname(storePath), { recursive: true });
-  await fs.writeFile(
-    storePath,
-    JSON.stringify(
-      {
-        version: storageVersion,
-        tasks: state.tasks.map(normalizeStoredTask),
-        calendarItems: state.calendarItems.map(normalizeStoredCalendarItem),
-      },
-      null,
-      2,
-    ),
-  );
-}
-
-export async function createTask(input, storePath = getPlannerStorePath()) {
-  const state = await loadPlannerState(storePath);
-  const task = createPlannerTask(input, state.tasks);
-  await savePlannerState({ ...state, tasks: [...state.tasks, task] }, storePath);
+export function createTask(input, storePath = getPlannerStorePath()) {
+  const db = getDatabase(storePath);
+  const existing = db.prepare("SELECT id FROM tasks").all();
+  const task = normalizeStoredTask(createPlannerTask(input, existing));
+  db.prepare(
+    "INSERT INTO tasks (id, name, description, priority, status) VALUES (?, ?, ?, ?, ?)",
+  ).run(task.id, task.name, task.description, task.priority, task.status);
   return task;
 }
 
-export async function listTasks(storePath = getPlannerStorePath()) {
-  const state = await loadPlannerState(storePath);
-  return state.tasks;
+export function listTasks(storePath = getPlannerStorePath()) {
+  return loadPlannerState(storePath).tasks;
 }
 
-export async function deleteTask(query, storePath = getPlannerStorePath()) {
-  const state = await loadPlannerState(storePath);
-  const match = findPlannerItem(state.tasks, query, (task) => task.name);
+export function deleteTask(query, storePath = getPlannerStorePath()) {
+  const db = getDatabase(storePath);
+  const match = findPlannerItem(listTasks(storePath), query, (task) => task.name);
   if (!match) {
     return {
       status: "not_found",
       message: "No matching task was found.",
     };
   }
-  const tasks = state.tasks.filter((task) => task.id !== match.id);
-  await savePlannerState({ ...state, tasks }, storePath);
+  db.prepare("DELETE FROM tasks WHERE id = ?").run(match.id);
   return {
     status: "deleted",
     message: "Task deleted.",
@@ -82,9 +95,9 @@ export async function deleteTask(query, storePath = getPlannerStorePath()) {
   };
 }
 
-export async function updateTaskStatus(query, status, storePath = getPlannerStorePath()) {
-  const state = await loadPlannerState(storePath);
-  const match = findPlannerItem(state.tasks, query, (task) => task.name);
+export function updateTaskStatus(query, status, storePath = getPlannerStorePath()) {
+  const db = getDatabase(storePath);
+  const match = findPlannerItem(listTasks(storePath), query, (task) => task.name);
   if (!match) {
     return {
       status: "not_found",
@@ -92,8 +105,7 @@ export async function updateTaskStatus(query, status, storePath = getPlannerStor
     };
   }
   const updated = { ...match, status };
-  const tasks = state.tasks.map((task) => (task.id === match.id ? updated : task));
-  await savePlannerState({ ...state, tasks }, storePath);
+  db.prepare("UPDATE tasks SET status = ? WHERE id = ?").run(updated.status, updated.id);
   return {
     status: "updated",
     message: "Task status updated.",
@@ -101,32 +113,30 @@ export async function updateTaskStatus(query, status, storePath = getPlannerStor
   };
 }
 
-export async function createCalendarItem(input, storePath = getPlannerStorePath()) {
-  const state = await loadPlannerState(storePath);
-  const calendarItem = createPlannerCalendarItem(input, state.calendarItems);
-  await savePlannerState(
-    { ...state, calendarItems: [...state.calendarItems, calendarItem] },
-    storePath,
-  );
-  return calendarItem;
+export function createCalendarItem(input, storePath = getPlannerStorePath()) {
+  const db = getDatabase(storePath);
+  const existing = db.prepare("SELECT id FROM calendar_items").all();
+  const item = normalizeStoredCalendarItem(createPlannerCalendarItem(input, existing));
+  db.prepare(
+    "INSERT INTO calendar_items (id, title, description, date, time) VALUES (?, ?, ?, ?, ?)",
+  ).run(item.id, item.title, item.description, item.date, item.time);
+  return item;
 }
 
-export async function listCalendarItems(storePath = getPlannerStorePath()) {
-  const state = await loadPlannerState(storePath);
-  return state.calendarItems;
+export function listCalendarItems(storePath = getPlannerStorePath()) {
+  return loadPlannerState(storePath).calendarItems;
 }
 
-export async function deleteCalendarItem(query, storePath = getPlannerStorePath()) {
-  const state = await loadPlannerState(storePath);
-  const match = findPlannerItem(state.calendarItems, query, (item) => item.title);
+export function deleteCalendarItem(query, storePath = getPlannerStorePath()) {
+  const db = getDatabase(storePath);
+  const match = findPlannerItem(listCalendarItems(storePath), query, (item) => item.title);
   if (!match) {
     return {
       status: "not_found",
       message: "No matching calendar item was found.",
     };
   }
-  const calendarItems = state.calendarItems.filter((item) => item.id !== match.id);
-  await savePlannerState({ ...state, calendarItems }, storePath);
+  db.prepare("DELETE FROM calendar_items WHERE id = ?").run(match.id);
   return {
     status: "deleted",
     message: "Calendar item deleted.",
@@ -141,16 +151,36 @@ export function emptyPlannerState() {
   };
 }
 
-function normalizePlannerState(value) {
-  if (!isRecord(value)) {
-    return emptyPlannerState();
-  }
-  return {
-    tasks: Array.isArray(value.tasks) ? value.tasks.map(normalizeStoredTask) : [],
-    calendarItems: Array.isArray(value.calendarItems)
-      ? value.calendarItems.map(normalizeStoredCalendarItem)
-      : [],
-  };
+// Imports the legacy planner/items.json file (from userData or the old tmp dir)
+// into SQLite, skipping any ids that already exist.
+export function migrateLegacyPlannerStore(dbPath = getPlannerStorePath()) {
+  migrateLegacyStores(
+    [
+      {
+        relativePath: "planner/items.json",
+        apply(db, parsed) {
+          if (!isRecord(parsed)) {
+            return;
+          }
+          const insertTask = db.prepare(
+            "INSERT OR IGNORE INTO tasks (id, name, description, priority, status) VALUES (?, ?, ?, ?, ?)",
+          );
+          const insertCalendar = db.prepare(
+            "INSERT OR IGNORE INTO calendar_items (id, title, description, date, time) VALUES (?, ?, ?, ?, ?)",
+          );
+          for (const raw of Array.isArray(parsed.tasks) ? parsed.tasks : []) {
+            const task = normalizeStoredTask(raw);
+            insertTask.run(task.id, task.name, task.description, task.priority, task.status);
+          }
+          for (const raw of Array.isArray(parsed.calendarItems) ? parsed.calendarItems : []) {
+            const item = normalizeStoredCalendarItem(raw);
+            insertCalendar.run(item.id, item.title, item.description, item.date, item.time);
+          }
+        },
+      },
+    ],
+    dbPath,
+  );
 }
 
 function normalizeStoredTask(value) {
@@ -198,20 +228,6 @@ function findPlannerItem(items, query, getName) {
     items.find((item) => getName(item).trim().toLowerCase().includes(normalizedQuery)) ??
     null
   );
-}
-
-function getUserDataPath() {
-  if (globalThis.process?.type) {
-    try {
-      const electronApp = globalThis.require?.("electron")?.app;
-      if (electronApp?.getPath) {
-        return electronApp.getPath("userData");
-      }
-    } catch {
-      // Fall through to the deterministic Node test/runtime path.
-    }
-  }
-  return path.join(os.tmpdir(), "brah-user-data");
 }
 
 function isRecord(value) {

@@ -15,7 +15,6 @@ const statusLabels = Object.freeze({
 
 export function createPanelController({ brah, onModeChange } = {}) {
   const bridge = brah ?? window.brah;
-  const toggleButtons = Array.from(document.querySelectorAll("[data-panel-toggle]"));
   const panelElement = document.querySelector("#panel");
   const tabsElement = document.querySelector("#panel-tabs");
   const bodyElement = document.querySelector("#panel-body");
@@ -400,9 +399,6 @@ export function createPanelController({ brah, onModeChange } = {}) {
     }
     isOpen = true;
     panelElement.hidden = false;
-    for (const button of toggleButtons) {
-      button.setAttribute("aria-pressed", "true");
-    }
     onModeChange?.("panel");
     await bridge.setWindowMode("panel");
     requestAnimationFrame(() => panelElement.classList.add("is-open"));
@@ -410,39 +406,32 @@ export function createPanelController({ brah, onModeChange } = {}) {
     await loadActiveTab();
   }
 
-  async function close({ windowMode = "orb" } = {}) {
+  async function close({ windowMode = "call", immediate = false, skipWindowMode = false } = {}) {
     if (!isOpen) {
       return;
     }
     isOpen = false;
     panelElement.classList.remove("is-open");
-    for (const button of toggleButtons) {
-      button.setAttribute("aria-pressed", "false");
-    }
     onModeChange?.("orb");
-    await bridge.setWindowMode(windowMode);
-    window.setTimeout(() => {
-      if (!isOpen) {
-        panelElement.hidden = true;
-      }
-    }, 160);
-  }
-
-  async function toggle() {
-    if (isOpen) {
-      await close();
-    } else {
-      await open();
+    // immediate hides the panel synchronously (no fade) so a caller resizing the
+    // window next does not flash the full panel squished into the small frame.
+    if (immediate) {
+      panelElement.hidden = true;
+    }
+    if (!skipWindowMode) {
+      await bridge.setWindowMode(windowMode);
+    }
+    if (!immediate) {
+      window.setTimeout(() => {
+        if (!isOpen) {
+          panelElement.hidden = true;
+        }
+      }, 160);
     }
   }
 
   function init({ openByDefault = false } = {}) {
     renderTabs();
-    for (const button of toggleButtons) {
-      button.addEventListener("click", () => {
-        void toggle();
-      });
-    }
     dataChangedListener = bridge.onDataChanged?.(handleDataChanged) ?? null;
     if (openByDefault) {
       void open();
@@ -453,7 +442,6 @@ export function createPanelController({ brah, onModeChange } = {}) {
     init,
     open,
     close,
-    toggle,
     isOpen: () => isOpen,
     dispose() {
       if (dataChangedListener) {

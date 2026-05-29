@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld("brah", {
   getActivity: (kind) => ipcRenderer.invoke("activity:list", kind),
   setWindowMode: (mode) => ipcRenderer.invoke("window:set-mode", mode),
   setWindowFocusable: (focusable) => ipcRenderer.invoke("window:set-focusable", focusable),
+  minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
   onDataChanged: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("data:changed", listener);
