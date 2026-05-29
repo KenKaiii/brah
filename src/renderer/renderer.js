@@ -1,4 +1,9 @@
-import { buildWelcomeInstructions, normalizeAgentProfile } from "../realtime/prompts.js";
+import {
+  AGENT_PERSONAS,
+  buildWelcomeInstructions,
+  normalizeAgentProfile,
+  REALTIME_VOICES,
+} from "../realtime/prompts.js";
 import { initClickSound } from "./click-sound.js";
 import { createPanelController } from "./panel.js";
 import { createRealtimePlaybackTracker, isBenignCancelError } from "./realtime-playback.js";
@@ -30,6 +35,8 @@ const agentBackButton = document.querySelector("#agent-back");
 const agentFormElement = document.querySelector("#agent-form");
 const agentNameInput = document.querySelector("#agent-name");
 const agentGoalsInput = document.querySelector("#agent-goals");
+const agentVoiceSelect = document.querySelector("#agent-voice");
+const agentPersonaSelect = document.querySelector("#agent-persona");
 const agentStatusElement = document.querySelector("#agent-status");
 const callToggleButton = document.querySelector("#call-toggle");
 const headerCallButton = document.querySelector("#header-call");
@@ -271,15 +278,38 @@ async function loadAgentProfile() {
   renderAgentProfile();
 }
 
+function populateAgentOptions() {
+  agentVoiceSelect.replaceChildren(
+    ...REALTIME_VOICES.map((voice) => {
+      const option = document.createElement("option");
+      option.value = voice;
+      option.textContent = voice.charAt(0).toUpperCase() + voice.slice(1);
+      return option;
+    }),
+  );
+  agentPersonaSelect.replaceChildren(
+    ...Object.entries(AGENT_PERSONAS).map(([key, { label }]) => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = label;
+      return option;
+    }),
+  );
+}
+
 function renderAgentProfile() {
   agentNameInput.value = agentProfile.name;
   agentGoalsInput.value = agentProfile.goals.join("\n");
+  agentVoiceSelect.value = agentProfile.voice;
+  agentPersonaSelect.value = agentProfile.persona;
 }
 
 async function saveAgentProfile() {
   const profile = {
     name: agentNameInput.value,
     goals: agentGoalsInput.value.split("\n"),
+    voice: agentVoiceSelect.value,
+    persona: agentPersonaSelect.value,
   };
   agentStatusElement.textContent = "Saving\u2026";
   try {
@@ -1164,6 +1194,7 @@ refreshOpenAIStatus().catch((error) => {
 refreshOsPermissions().catch((error) => {
   setStatus(`Permissions failed: ${error.message}`);
 });
+populateAgentOptions();
 loadAgentProfile().catch((error) => {
   setStatus(`Agent profile failed: ${error.message}`);
 });

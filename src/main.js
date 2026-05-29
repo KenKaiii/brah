@@ -359,9 +359,11 @@ ipcMain.handle("openai:create-realtime-secret", async (_event, options = {}) => 
     throw new Error("Sign in to OpenAI before starting Realtime.");
   }
 
+  const profile = loadAgentProfile();
   return createRealtimeClientSecret(credentials, {
     ...options,
-    instructions: buildRealtimeInstructions({ profile: loadAgentProfile() }),
+    voice: profile.voice,
+    instructions: buildRealtimeInstructions({ profile }),
   });
 });
 

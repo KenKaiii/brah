@@ -879,7 +879,8 @@ button {
 }
 
 .agent-input,
-.agent-textarea {
+.agent-textarea,
+.agent-select {
   width: 100%;
   padding: 9px 11px;
   border: 1px solid var(--hairline);
@@ -892,10 +893,20 @@ button {
   transition: border-color var(--dur) var(--ease-out);
 }
 
+.agent-select {
+  cursor: pointer;
+}
+
 .agent-input:focus,
-.agent-textarea:focus {
+.agent-textarea:focus,
+.agent-select:focus {
   outline: none;
   border-color: var(--hairline-strong);
+}
+
+.agent-hint {
+  font-size: 0.62rem;
+  color: var(--text-2);
 }
 
 .agent-save {

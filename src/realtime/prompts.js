@@ -32,9 +32,55 @@ You are LAD, Ken's fast, conversational voice companion inside a dark, minimal d
 - Only respond to clear speech.
 - If input is unclear, ask a quick clarification.`;
 
+export const REALTIME_VOICES = Object.freeze([
+  "marin",
+  "cedar",
+  "alloy",
+  "ash",
+  "ballad",
+  "coral",
+  "echo",
+  "sage",
+  "shimmer",
+  "verse",
+]);
+
+export const DEFAULT_VOICE = "marin";
+
+export const AGENT_PERSONAS = Object.freeze({
+  default: {
+    label: "Default",
+    prompt: "",
+  },
+  hype: {
+    label: "Hype",
+    prompt:
+      "Tone: high-energy hype companion. Be upbeat, encouraging, and punchy. Celebrate wins, keep momentum high, and use lively, enthusiastic phrasing without getting wordy.",
+  },
+  calm: {
+    label: "Calm",
+    prompt:
+      "Tone: calm and grounding. Speak in a slow, soothing, reassuring way. Keep things low-pressure, gentle, and unhurried while staying helpful.",
+  },
+  professional: {
+    label: "Professional",
+    prompt:
+      "Tone: crisp and professional. Be precise, composed, and efficient. Skip slang, stay focused on outcomes, and keep replies polished but still concise.",
+  },
+  honest: {
+    label: "Brutally honest",
+    prompt:
+      "Tone: brutally honest. Give direct, no-sugarcoating feedback. Call out problems plainly and skip flattery, but stay constructive rather than mean.",
+  },
+});
+
+export const DEFAULT_PERSONA = "default";
+
 export const DEFAULT_AGENT_PROFILE = Object.freeze({
   goals: [],
   name: "Ken",
+  voice: DEFAULT_VOICE,
+  persona: DEFAULT_PERSONA,
 });
 
 export function buildWelcomeInstructions(profile = DEFAULT_AGENT_PROFILE) {
@@ -44,9 +90,20 @@ export function buildWelcomeInstructions(profile = DEFAULT_AGENT_PROFILE) {
 }
 
 export function buildAgentInstructions(profile = DEFAULT_AGENT_PROFILE) {
-  return [STATIC_VOICE_INSTRUCTIONS, buildAgentProfileInstructions(profile)]
+  const normalized = normalizeAgentProfile(profile);
+  return [
+    STATIC_VOICE_INSTRUCTIONS,
+    buildPersonaInstructions(normalized.persona),
+    buildAgentProfileInstructions(normalized),
+  ]
     .filter((section) => section.trim().length > 0)
     .join("\n\n");
+}
+
+export function buildPersonaInstructions(persona) {
+  const key = typeof persona === "string" && persona in AGENT_PERSONAS ? persona : DEFAULT_PERSONA;
+  const prompt = AGENT_PERSONAS[key].prompt;
+  return prompt ? `# Persona\n${prompt}` : "";
 }
 
 export function buildAgentProfileInstructions(profile) {
@@ -93,7 +150,17 @@ export function normalizeAgentProfile(profile) {
   return {
     goals: normalizeGoals(Array.isArray(profile?.goals) ? profile.goals : []),
     name: typeof profile?.name === "string" ? profile.name.trim() : "",
+    voice: normalizeVoice(profile?.voice),
+    persona: normalizePersona(profile?.persona),
   };
+}
+
+function normalizeVoice(voice) {
+  return typeof voice === "string" && REALTIME_VOICES.includes(voice) ? voice : DEFAULT_VOICE;
+}
+
+function normalizePersona(persona) {
+  return typeof persona === "string" && persona in AGENT_PERSONAS ? persona : DEFAULT_PERSONA;
 }
 
 function normalizeGoals(goals) {
