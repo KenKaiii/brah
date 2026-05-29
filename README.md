@@ -1,29 +1,31 @@
-# Pocket Agent
+# Brah
 
-**Your AI that actually knows you.**
+**Your AI that actually sees and does.**
 
-A desktop voice assistant that lives in your menu bar. It listens, sees your screen, controls your computer, and gets things done — all through the OpenAI Realtime API.
+Brah is a desktop voice assistant that lives in the corner of your screen. Talk to it and it listens, looks at your screen, controls your computer, and gets things done — all in realtime through the OpenAI Realtime API.
 
-- **Repo:** https://github.com/KenKaiii/brah
-- **YouTube:** [@kenkaidoesai](https://www.youtube.com/kenkaidoesai) — tutorials and demos
-- **Community:** [Skool](https://www.skool.com/kenkai) — come hang out
+It's not just a chatbot. It can take screenshots and reason about what's on screen, drive your mouse and keyboard, automate the browser, and manage your tasks and calendar — hands-free.
+
+## 🧠 Why this exists
+
+Most voice assistants can talk but can't *do*. Brah closes that gap: it sees your actual screen, controls your actual computer, and runs real tools — so a conversation turns into action instead of just suggestions.
 
 ## ✨ What it actually does
 
 **Realtime voice**
-Talk to it naturally. Low-latency voice in, voice out, powered by the OpenAI Realtime API with live transcription and barge-in.
+Low-latency voice in, voice out, powered by the OpenAI Realtime API. Live transcription and natural barge-in so you can interrupt and steer mid-sentence.
 
 **Sees your screen**
-Take screenshots of any window or display and have the model analyze what's on screen — visible text, UI elements, errors, and the obvious next action.
+Take screenshots of any window or display and have the model analyze what's there — visible text, UI elements, errors, and the obvious next action.
 
 **Computer use**
-Two modes: a sandboxed Chromium browser (via Playwright) for web tasks, or full OS control (via nut.js) to drive the real mouse and keyboard.
+Two modes: a sandboxed Chromium browser (via Playwright) for web tasks, or full OS-level control (via nut.js) to drive the real mouse and keyboard.
 
 **Planner**
 Built-in tasks and calendar the agent can create, update, and remind you about.
 
 **Web search & fetch**
-Pull live information and read pages on demand.
+Pulls live information and reads pages on demand.
 
 ## 🚀 Getting started
 
