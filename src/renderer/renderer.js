@@ -1160,9 +1160,9 @@ function setupWaveCanvas() {
   }
   waveContext.setTransform(ratio, 0, 0, ratio, 0, 0);
   waveGradient = waveContext.createLinearGradient(0, 0, WAVE_CSS_WIDTH, 0);
-  waveGradient.addColorStop(0, "#818cf8");
-  waveGradient.addColorStop(0.5, "#a5b4fc");
-  waveGradient.addColorStop(1, "#59d9c4");
+  waveGradient.addColorStop(0, "#6b62f2");
+  waveGradient.addColorStop(0.5, "#b855e7");
+  waveGradient.addColorStop(1, "#60a5fa");
 }
 
 function clearWaveform() {

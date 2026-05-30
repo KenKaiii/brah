@@ -1,42 +1,66 @@
 :root {
-  /* Surfaces */
-  --bg-deep: #07080c;
-  --hairline: rgba(255, 255, 255, 0.07);
-  --hairline-strong: rgba(255, 255, 255, 0.13);
-  --raised: rgba(255, 255, 255, 0.03);
-  --raised-hover: rgba(255, 255, 255, 0.055);
+  /* Surfaces — Superwhisper foundation (Midnight Eclipse / Starless Night) blended
+     with Dimension's translucent HUD chrome. */
+  --bg-deep: #000000; /* Midnight Eclipse — page canvas */
+  --bg-elevated: #030719; /* Starless Night — subtle elevation */
+  --bg-overlay: #001b33; /* Deep Ocean — specialized cool surface */
+  --hairline: rgba(229, 229, 229, 0.1);
+  --hairline-strong: rgba(229, 229, 229, 0.2);
+  --raised: rgba(255, 255, 255, 0.04);
+  --raised-hover: rgba(255, 255, 255, 0.07);
+  --surface-translucent: rgba(0, 0, 0, 0.2);
+  --surface-ghost: rgba(212, 212, 212, 0.08);
 
-  /* Text */
-  --text: #eef1f7;
-  --text-2: rgba(235, 238, 246, 0.6);
-  --text-3: rgba(235, 238, 246, 0.38);
+  /* Text — Frost / Ghostly Gray ramp */
+  --text: #ffffff;
+  --text-2: rgba(229, 231, 235, 0.78);
+  --text-3: rgba(229, 231, 235, 0.46);
 
-  /* Accent + semantics (vivid foregrounds, tinted fills, visible borders) */
-  --accent: #a5b4fc;
-  --accent-bright: #c7d2fe;
-  --accent-soft: rgba(129, 140, 248, 0.18);
-  --accent-line: rgba(129, 140, 248, 0.36);
-  --success: #6ee7b7;
-  --success-soft: rgba(16, 185, 129, 0.2);
-  --success-line: rgba(52, 211, 153, 0.38);
-  --warn: #fcd34d;
-  --warn-soft: rgba(245, 158, 11, 0.2);
-  --warn-line: rgba(251, 191, 36, 0.38);
-  --danger: #fda4af;
-  --danger-soft: rgba(244, 63, 94, 0.2);
-  --danger-line: rgba(251, 113, 133, 0.38);
+  /* Accent — Superwhisper Electric Blue, with Sky Blue for emphasis */
+  --accent: #0088ff;
+  --accent-bright: #60a5fa;
+  --accent-soft: rgba(0, 136, 255, 0.16);
+  --accent-line: rgba(0, 136, 255, 0.4);
 
-  /* Radii */
-  --radius-window: 16px;
-  --radius-lg: 14px;
-  --radius-md: 11px;
-  --radius-sm: 8px;
+  /* Semantics — Vivid Green / Sunshine Yellow / Crimson Red */
+  --success: #16c253;
+  --success-soft: rgba(22, 194, 83, 0.16);
+  --success-line: rgba(22, 194, 83, 0.4);
+  --warn: #ffdd00;
+  --warn-soft: rgba(255, 221, 0, 0.14);
+  --warn-line: rgba(255, 221, 0, 0.4);
+  --danger: #ff5252;
+  --danger-soft: rgba(255, 82, 82, 0.16);
+  --danger-line: rgba(255, 82, 82, 0.4);
 
-  /* Button depth (the raised "3D" look shared with the active tab) */
-  --btn-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025));
-  --btn-sheen-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.045));
-  --btn-raise: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 2px 6px rgba(0, 0, 0, 0.3);
-  --btn-raise-hover: 0 1px 0 rgba(255, 255, 255, 0.11) inset, 0 4px 12px rgba(0, 0, 0, 0.4);
+  /* Nebula gradient (orb + atmospheric panels) — Dimension Gradient Aura +
+     Interactive Glow combined with Superwhisper Magenta Burst + Deep Ocean. */
+  --nebula-1: #4867af;
+  --nebula-2: #6b62f2;
+  --nebula-3: #b855e7;
+  --nebula-4: #001b33;
+
+  /* Radii — Dimension cards (24px) / callouts (10px) / pill (9999px) +
+     Superwhisper default 9px / button 4px. */
+  --radius-window: 24px;
+  --radius-lg: 16px;
+  --radius-md: 10px;
+  --radius-sm: 9px;
+  --radius-xs: 4px;
+  --radius-pill: 9999px;
+
+  /* Buttons — flat ghost surfaces; no more raised plastic. Existing rules that
+     compose --btn-sheen / --btn-raise pick up the new translucent language. */
+  --btn-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+  --btn-sheen-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
+  --btn-raise: none;
+  --btn-raise-hover: none;
+
+  /* Shadows — Dimension's three-layer diffused drop + window frame */
+  --shadow-card: drop-shadow(rgba(255, 255, 255, 0.02) 0 3px 4.5px)
+    drop-shadow(rgba(0, 0, 0, 0.04) 0 10px 8px) drop-shadow(rgba(0, 0, 0, 0.1) 0 4px 3px);
+  --shadow-window: 0 0 0 1px rgba(229, 229, 229, 0.06), 0 30px 80px rgba(0, 0, 0, 0.55);
+  --shadow-icon-hover: rgba(255, 255, 255, 0.2) 0 0 0 2px inset;
 
   /* Motion */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -45,7 +69,8 @@
   color: var(--text);
   background: transparent;
   font-family:
-    Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    "Inter", Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -151,12 +176,11 @@ button {
   border: 1px solid var(--hairline);
   border-radius: var(--radius-window);
   background:
-    radial-gradient(135% 90% at 50% -12%, rgba(129, 140, 248, 0.09), transparent 55%),
-    linear-gradient(180deg, rgba(21, 23, 31, 0.92), rgba(9, 10, 15, 0.94));
-  backdrop-filter: blur(22px) saturate(1.2);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.05) inset,
-    0 30px 80px rgba(0, 0, 0, 0.5);
+    radial-gradient(140% 80% at 50% -12%, rgba(107, 98, 242, 0.14), transparent 58%),
+    radial-gradient(120% 70% at 80% 120%, rgba(72, 103, 175, 0.1), transparent 60%),
+    linear-gradient(180deg, rgba(10, 10, 10, 0.92), rgba(3, 7, 25, 0.96));
+  backdrop-filter: blur(20px) saturate(1.15);
+  box-shadow: var(--shadow-window);
   opacity: 0;
   transform: translateY(6px);
   pointer-events: none;
@@ -181,6 +205,7 @@ button {
   border-bottom: 1px solid var(--hairline);
 }
 
+/* Pill-circular ghost button — matches Dimension's compact navigation pills. */
 .menu-button {
   display: grid;
   place-items: center;
@@ -188,24 +213,21 @@ button {
   height: 30px;
   padding: 0;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-  background: var(--btn-sheen), var(--raised);
-  box-shadow: var(--btn-raise);
+  border-radius: var(--radius-pill);
+  background: var(--raised);
   cursor: pointer;
   transition:
     border-color var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out),
     background var(--dur) var(--ease-out);
 }
 
 .menu-button:hover {
   border-color: var(--hairline-strong);
-  background: var(--btn-sheen-hover), var(--raised-hover);
-  box-shadow: var(--btn-raise-hover);
+  background: var(--raised-hover);
 }
 
 .menu-button[aria-expanded="true"] {
-  border-color: rgba(129, 140, 248, 0.4);
+  border-color: var(--accent-line);
   background: var(--accent-soft);
 }
 
@@ -241,19 +263,22 @@ button {
 
 .panel-title {
   flex: 1;
-  font-family: "Space Grotesk", Geist, sans-serif;
-  font-size: 0.96rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: Geist, "Inter", sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
 }
 
+/* Superwhisper-style status pill: full pill radius, Frost text on translucent
+   surface, vivid status dot driving the color story. */
 .openai-indicator {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px 4px 9px;
+  padding: 4px 11px 4px 9px;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--text-2);
   background: var(--raised);
   font-size: 0.58rem;
@@ -279,10 +304,13 @@ button {
 
 .openai-indicator[data-connected="true"]::before {
   background: var(--success);
-  box-shadow: 0 0 8px rgba(110, 231, 183, 0.75);
+  box-shadow: 0 0 8px rgba(22, 194, 83, 0.7);
 }
 
 /* ---------- Header call control ---------- */
+/* Superwhisper "Header Download Button": Frost background, Midnight Eclipse
+   text, full pill radius. The active (in-call) state switches to a Crimson
+   Red ghost pill so it never competes visually with the orb. */
 .header-call {
   display: inline-flex;
   align-items: center;
@@ -291,14 +319,12 @@ button {
   height: 30px;
   padding: 0 14px;
   border: 0;
-  border-radius: var(--radius-sm);
-  color: #fff;
-  background: linear-gradient(180deg, #7c8cff, #5b6cf0);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.18) inset,
-    0 6px 16px rgba(91, 108, 240, 0.35);
+  border-radius: var(--radius-pill);
+  color: #000000;
+  background: #ffffff;
+  box-shadow: none;
   cursor: pointer;
-  font-family: "Space Grotesk", Geist, sans-serif;
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -306,14 +332,13 @@ button {
     background var(--dur) var(--ease-out),
     box-shadow var(--dur) var(--ease-out),
     transform var(--dur) var(--ease-out),
-    opacity var(--dur) var(--ease-out);
+    opacity var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
 }
 
 .header-call:hover:not(:disabled) {
-  background: linear-gradient(180deg, #8b99ff, #6a7af5);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.22) inset,
-    0 8px 20px rgba(91, 108, 240, 0.45);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-icon-hover);
 }
 
 .header-call:active:not(:disabled) {
@@ -326,14 +351,14 @@ button {
 }
 
 .header-call.is-active {
-  background: linear-gradient(180deg, #fb7185, #ef4358);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.18) inset,
-    0 6px 16px rgba(239, 67, 88, 0.4);
+  color: var(--danger);
+  background: var(--danger-soft);
+  box-shadow: inset 0 0 0 1px var(--danger-line);
 }
 
 .header-call.is-active:hover:not(:disabled) {
-  background: linear-gradient(180deg, #fc8194, #f1576a);
+  background: rgba(255, 82, 82, 0.24);
+  box-shadow: inset 0 0 0 1px var(--danger);
 }
 
 .header-call-icon {
@@ -354,10 +379,10 @@ button {
   padding: 6px;
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, rgba(26, 28, 37, 0.98), rgba(17, 18, 25, 0.98));
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0.96), rgba(3, 7, 25, 0.97));
   backdrop-filter: blur(20px);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 0 1px rgba(229, 229, 229, 0.06),
     0 24px 56px rgba(0, 0, 0, 0.55);
   transform-origin: top left;
   animation: menu-in 160ms var(--ease-out);
@@ -389,8 +414,8 @@ button {
 }
 
 .menu-item:hover {
-  background: var(--accent-soft);
-  color: var(--accent-bright);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
 }
 
 .menu-item:disabled {
@@ -398,22 +423,23 @@ button {
   color: var(--text-3);
 }
 
-/* ---------- Tabs (segmented control) ---------- */
+/* ---------- Tabs (Dimension floating-pill segmented control) ---------- */
 .panel-tabs {
   display: flex;
   gap: 2px;
   margin: 11px 13px 4px;
   padding: 3px;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.22);
+  border-radius: var(--radius-pill);
+  background: var(--surface-translucent);
+  backdrop-filter: blur(4px);
 }
 
 .panel-tab {
   flex: 1;
   padding: 6px 6px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--text-2);
   background: transparent;
   cursor: pointer;
@@ -431,9 +457,9 @@ button {
 }
 
 .panel-tab.is-active {
-  color: var(--text);
-  background: var(--btn-sheen-hover);
-  box-shadow: var(--btn-raise);
+  color: #000000;
+  background: var(--text);
+  box-shadow: none;
 }
 
 /* ---------- Body ---------- */
@@ -471,13 +497,14 @@ button {
   animation: none;
 }
 
+/* Editorial section labels — Inter at tight cap-tracking, Pewter for restraint. */
 .panel-section-header {
-  margin: 15px 6px 5px;
+  margin: 16px 6px 6px;
   color: var(--text-3);
-  font-family: "Space Grotesk", Geist, sans-serif;
-  font-size: 0.62rem;
+  font-family: Geist, "Inter", sans-serif;
+  font-size: 0.6rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -504,7 +531,7 @@ button {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(220px circle at 50% -40%, rgba(129, 140, 248, 0.1), transparent 70%);
+  background: radial-gradient(220px circle at 50% -40%, rgba(0, 136, 255, 0.12), transparent 70%);
   opacity: 0;
   transition: opacity var(--dur) var(--ease-out);
   pointer-events: none;
@@ -526,8 +553,9 @@ button {
 }
 
 .panel-row.is-selected {
-  border-color: var(--accent);
-  background: rgba(129, 140, 248, 0.16);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(0, 136, 255, 0.12);
 }
 
 .panel-row.is-selected::before {
@@ -617,18 +645,18 @@ button {
 .state-dot.state-completed {
   border-color: var(--success);
   background: var(--success);
-  box-shadow: 0 0 8px rgba(110, 231, 183, 0.5);
+  box-shadow: 0 0 8px rgba(22, 194, 83, 0.5);
 }
 
-/* ---------- Pills / badges ---------- */
+/* ---------- Pills / badges — Superwhisper Badge spec (true pill) ---------- */
 .priority-pill,
 .status-badge {
   position: relative;
   z-index: 1;
   flex-shrink: 0;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   font-size: 0.55rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -648,9 +676,9 @@ button {
 }
 
 .priority-low {
-  color: var(--text-2);
+  color: var(--text-3);
   border-color: var(--hairline);
-  background: var(--raised);
+  background: transparent;
 }
 
 .calendar-time {
@@ -660,14 +688,14 @@ button {
   width: 62px;
   padding-top: 1px;
   color: var(--accent);
-  font-family: "Space Grotesk", Geist, sans-serif;
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .status-badge {
-  color: var(--text-2);
+  color: var(--text-3);
   border-color: var(--hairline);
   background: var(--raised);
 }
@@ -742,8 +770,10 @@ button {
 }
 
 .screenshot-card.is-selected .screenshot-thumb {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent);
+  border-color: var(--accent-line);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 16px rgba(0, 136, 255, 0.3);
 }
 
 .screenshot-caption {
@@ -753,27 +783,24 @@ button {
 
 .screenshot-reveal {
   align-self: flex-start;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--text-2);
-  background: var(--btn-sheen), var(--raised);
-  box-shadow: var(--btn-raise);
+  background: var(--raised);
   cursor: pointer;
   font-size: 0.58rem;
   font-weight: 600;
   transition:
     color var(--dur) var(--ease-out),
     border-color var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out),
     background var(--dur) var(--ease-out);
 }
 
 .screenshot-reveal:hover {
   color: var(--text);
   border-color: var(--hairline-strong);
-  background: var(--btn-sheen-hover), var(--raised-hover);
-  box-shadow: var(--btn-raise-hover);
+  background: var(--raised-hover);
 }
 
 /* ---------- Empty state ---------- */
@@ -790,19 +817,26 @@ button {
   animation: body-in 260ms var(--ease-out);
 }
 
+/* A tiny nebula token — Interactive Glow + Magenta Burst behind a hairline
+   ring, echoing the orb's palette at micro scale. */
 .panel-empty::before {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--hairline-strong);
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, var(--accent-soft), transparent 70%);
+  background:
+    radial-gradient(circle at 38% 32%, rgba(107, 98, 242, 0.45), transparent 60%),
+    radial-gradient(circle at 70% 70%, rgba(184, 85, 231, 0.32), transparent 65%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 24px rgba(107, 98, 242, 0.25);
   content: "";
 }
 
 .panel-empty-title {
   margin: 2px 0 0;
   color: var(--text);
-  font-family: "Space Grotesk", Geist, sans-serif;
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.86rem;
   font-weight: 600;
 }
@@ -815,14 +849,15 @@ button {
   line-height: 1.4;
 }
 
-/* ---------- Footer ---------- */
+/* ---------- Footer — compact utility row with hairline divider ---------- */
 .panel-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 9px 14px;
+  gap: 10px;
+  padding: 10px 14px;
   border-top: 1px solid var(--hairline);
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .panel-footer-text {
@@ -852,7 +887,7 @@ button {
   justify-content: space-between;
   gap: 10px;
   padding: 22px 16px 16px;
-  background: linear-gradient(180deg, transparent, rgba(9, 10, 15, 0.94) 48%);
+  background: linear-gradient(180deg, transparent, rgba(3, 7, 25, 0.96) 48%);
   opacity: 0;
   transform: translateY(10px);
   pointer-events: none;
@@ -897,7 +932,7 @@ button {
   border-radius: var(--radius-sm);
   color: #fff;
   cursor: pointer;
-  font-family: "Space Grotesk", Geist, sans-serif;
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.76rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -916,38 +951,36 @@ button {
   flex: none;
 }
 
+/* Superwhisper "Header Download Button" — Frost pill for primary action. */
 .selection-done {
-  background: linear-gradient(180deg, #7c8cff, #5b6cf0);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.18) inset,
-    0 6px 16px rgba(91, 108, 240, 0.35);
+  color: #000000;
+  background: #ffffff;
+  border-radius: var(--radius-pill);
+  box-shadow: none;
 }
 
 .selection-done:hover {
-  background: linear-gradient(180deg, #8b99ff, #6a7af5);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.22) inset,
-    0 8px 20px rgba(91, 108, 240, 0.45);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-icon-hover);
 }
 
+/* Crimson Red ghost pill for destructive action. */
 .selection-delete {
-  background: linear-gradient(180deg, #fb7185, #ef4358);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.18) inset,
-    0 6px 16px rgba(239, 67, 88, 0.4);
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 1px var(--danger-line);
 }
 
 .selection-delete:hover {
-  background: linear-gradient(180deg, #fc8194, #f1576a);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.22) inset,
-    0 8px 20px rgba(239, 67, 88, 0.5);
+  background: rgba(255, 82, 82, 0.24);
+  box-shadow: inset 0 0 0 1px var(--danger);
 }
 
 .mic-picker {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   color: var(--text-3);
 }
@@ -959,14 +992,14 @@ button {
 
 .mic-select {
   max-width: 190px;
-  padding: 3px 20px 3px 6px;
+  padding: 4px 20px 4px 8px;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--text-2);
   background-color: var(--raised);
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa0ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e5e7eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 6px center;
   background-size: 11px;
@@ -1015,9 +1048,10 @@ button {
   overflow: hidden;
   border-radius: var(--radius-window);
   background:
-    radial-gradient(135% 90% at 50% -12%, rgba(129, 140, 248, 0.08), transparent 55%),
-    linear-gradient(180deg, rgba(21, 23, 31, 0.96), rgba(9, 10, 15, 0.97));
-  backdrop-filter: blur(22px);
+    radial-gradient(140% 80% at 50% -10%, rgba(107, 98, 242, 0.12), transparent 58%),
+    radial-gradient(120% 70% at 85% 115%, rgba(72, 103, 175, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(10, 10, 10, 0.96), rgba(3, 7, 25, 0.97));
+  backdrop-filter: blur(20px);
   animation: body-in 200ms var(--ease-out);
 }
 
@@ -1037,13 +1071,16 @@ button {
 }
 
 .agent-label {
-  font-size: 0.66rem;
+  font-family: Geist, "Inter", sans-serif;
+  font-size: 0.64rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-2);
+  color: var(--text-3);
 }
 
+/* Superwhisper "Form Input" — semi-transparent Frost fill at 10% over Midnight,
+   9px radius, snug padding. */
 .agent-input,
 .agent-textarea,
 .agent-select {
@@ -1052,11 +1089,18 @@ button {
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
   color: var(--text);
-  background: var(--raised);
+  background: rgba(255, 255, 255, 0.06);
   font: inherit;
   font-size: 0.8rem;
   resize: none;
-  transition: border-color var(--dur) var(--ease-out);
+  transition:
+    border-color var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out);
+}
+
+.agent-input::placeholder,
+.agent-textarea::placeholder {
+  color: var(--text-3);
 }
 
 .agent-select {
@@ -1064,7 +1108,7 @@ button {
   appearance: none;
   -webkit-appearance: none;
   padding-right: 32px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239aa0ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23e5e7eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 11px center;
   background-size: 14px;
@@ -1074,37 +1118,43 @@ button {
 .agent-textarea:focus,
 .agent-select:focus {
   outline: none;
-  border-color: var(--hairline-strong);
+  border-color: var(--accent-line);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .agent-hint {
-  font-size: 0.62rem;
-  color: var(--text-2);
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--text-3);
+  letter-spacing: 0.005em;
 }
 
+/* Frost pill for the primary save action — matches selection-done / header-call. */
 .agent-save {
   flex: none;
-  padding: 5px 14px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-  color: var(--text-2);
-  background: var(--btn-sheen), var(--raised);
-  box-shadow: var(--btn-raise);
+  padding: 6px 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: #000000;
+  background: #ffffff;
+  box-shadow: none;
   cursor: pointer;
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
   transition:
-    color var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out),
     box-shadow var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out);
+    transform var(--dur) var(--ease-out);
 }
 
 .agent-save:hover {
-  color: var(--text);
-  border-color: var(--hairline-strong);
-  background: var(--btn-sheen-hover), var(--raised-hover);
-  box-shadow: var(--btn-raise-hover);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-icon-hover);
+}
+
+.agent-save:active {
+  transform: scale(0.97);
 }
 
 .view-header {
@@ -1122,15 +1172,13 @@ button {
   height: 30px;
   padding: 0;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--text-2);
-  background: var(--btn-sheen), var(--raised);
-  box-shadow: var(--btn-raise);
+  background: var(--raised);
   cursor: pointer;
   transition:
     color var(--dur) var(--ease-out),
     border-color var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out),
     background var(--dur) var(--ease-out);
 }
 
@@ -1141,16 +1189,16 @@ button {
 .view-back:hover {
   color: var(--text);
   border-color: var(--hairline-strong);
-  background: var(--btn-sheen-hover), var(--raised-hover);
-  box-shadow: var(--btn-raise-hover);
+  background: var(--raised-hover);
 }
 
 .view-title {
   flex: 1;
-  font-family: "Space Grotesk", Geist, sans-serif;
-  font-size: 0.86rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: Geist, "Inter", sans-serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text);
 }
 
 .permissions-list {
@@ -1159,21 +1207,22 @@ button {
   padding: 6px 13px 16px;
 }
 
+/* Dimension "Ghost Button" treatment — transparent face + hairline + pill radius.
+   Shared by all header utility actions and permission item actions. */
 .view-header button:not(.view-back),
 .permission-actions button {
-  padding: 5px 11px;
+  padding: 5px 12px;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--text-2);
-  background: var(--btn-sheen), var(--raised);
-  box-shadow: var(--btn-raise);
+  background: var(--raised);
   cursor: pointer;
   font-size: 0.62rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
   transition:
     color var(--dur) var(--ease-out),
     border-color var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out),
     background var(--dur) var(--ease-out);
 }
 
@@ -1181,8 +1230,7 @@ button {
 .permission-actions button:hover {
   color: var(--text);
   border-color: var(--hairline-strong);
-  background: var(--btn-sheen-hover), var(--raised-hover);
-  box-shadow: var(--btn-raise-hover);
+  background: var(--raised-hover);
 }
 
 .permission-item {
@@ -1204,7 +1252,11 @@ button {
 }
 
 .permission-status {
+  padding: 3px 10px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--radius-pill);
   color: var(--warn);
+  background: var(--warn-soft);
   font-size: 0.55rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1213,6 +1265,8 @@ button {
 
 .permission-status.is-granted {
   color: var(--success);
+  border-color: var(--success-line);
+  background: var(--success-soft);
 }
 
 .permission-description,
@@ -1313,15 +1367,17 @@ button {
   border-radius: 50%;
 }
 
-/* react-bits-style deep aurora bloom beneath the surface */
+/* Superwhisper "Nebula Horizon" bloom — Interactive Glow indigo, Magenta Burst,
+   Gradient Aura blue. Reads as a cosmic nebula contained inside the orb. */
 .orb-aurora {
   background:
-    radial-gradient(circle at 30% 28%, rgba(124, 152, 255, 0.65), transparent 55%),
-    radial-gradient(circle at 72% 68%, rgba(89, 217, 196, 0.5), transparent 52%),
-    radial-gradient(circle at 64% 24%, rgba(185, 198, 255, 0.45), transparent 48%);
-  filter: blur(6px) saturate(1.3);
+    radial-gradient(circle at 30% 28%, rgba(107, 98, 242, 0.68), transparent 56%),
+    radial-gradient(circle at 72% 68%, rgba(184, 85, 231, 0.55), transparent 54%),
+    radial-gradient(circle at 64% 24%, rgba(96, 165, 250, 0.5), transparent 50%),
+    radial-gradient(circle at 28% 76%, rgba(72, 103, 175, 0.45), transparent 48%);
+  filter: blur(6px) saturate(1.35);
   transform: rotate(calc(var(--orb-level) * -46deg)) scale(calc(1.08 + var(--orb-level) * 0.12));
-  opacity: calc(0.7 + var(--orb-level) * 0.3);
+  opacity: calc(0.72 + var(--orb-level) * 0.28);
   transition:
     transform 120ms linear,
     opacity 120ms linear;
@@ -1343,14 +1399,14 @@ button {
     radial-gradient(circle at 40% 60%, rgba(255, 255, 255, 0.55), transparent 20%),
     conic-gradient(
       from calc(var(--orb-level) * 70deg),
-      #6f8cff,
-      #5ec8e6,
-      #7a8dff,
-      #b9c6ff,
-      #59d9c4,
-      #6f8cff
+      #6b62f2,
+      #b855e7,
+      #60a5fa,
+      #4867af,
+      #b855e7,
+      #6b62f2
     );
-  filter: saturate(1.45) brightness(0.96);
+  filter: saturate(1.5) brightness(0.96);
   transform: rotate(calc(var(--orb-level) * 38deg)) scale(calc(1.1 + var(--orb-level) * 0.1));
   transition: transform 80ms linear;
 }
@@ -1362,8 +1418,8 @@ button {
       rgba(255, 255, 255, calc(0.62 + var(--orb-level) * 0.24)),
       transparent calc(9% + var(--orb-level) * 5%)
     ),
-    radial-gradient(circle at 46% 54%, rgba(168, 200, 255, 0.82), transparent 30%),
-    radial-gradient(circle at 54% 64%, rgba(5, 7, 11, 0.26), transparent 50%);
+    radial-gradient(circle at 46% 54%, rgba(184, 165, 255, 0.82), transparent 30%),
+    radial-gradient(circle at 54% 64%, rgba(0, 0, 0, 0.3), transparent 50%);
   mix-blend-mode: screen;
   opacity: calc(0.6 + var(--orb-level) * 0.3);
   transform: scale(calc(0.9 + var(--orb-level) * 0.16));
@@ -1372,20 +1428,22 @@ button {
     transform 80ms linear;
 }
 
+/* Outer glow uses Interactive Glow + Magenta Burst — the orb floats on a
+   nebula halo that intensifies with --orb-level. */
 .orb-glow {
   box-shadow:
-    inset 0 -20px 44px rgba(5, 7, 11, 0.4),
-    inset 0 18px 34px rgba(255, 255, 255, 0.18),
-    0 0 calc(26px + var(--orb-level) * 24px) rgba(129, 140, 248, 0.3),
-    0 0 calc(64px + var(--orb-level) * 44px) rgba(91, 140, 255, 0.2);
+    inset 0 -20px 44px rgba(0, 0, 0, 0.45),
+    inset 0 18px 34px rgba(255, 255, 255, 0.16),
+    0 0 calc(26px + var(--orb-level) * 24px) rgba(107, 98, 242, 0.36),
+    0 0 calc(64px + var(--orb-level) * 44px) rgba(184, 85, 231, 0.22);
   background:
-    radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.26), transparent 20%),
-    radial-gradient(circle at 50% 104%, rgba(5, 7, 11, 0.56), transparent 38%);
+    radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.24), transparent 20%),
+    radial-gradient(circle at 50% 104%, rgba(0, 0, 0, 0.58), transparent 38%);
 }
 
 .app-shell[data-mode="speaking"] .siri-orb {
-  --orb-brightness: calc(1.06 + var(--orb-level) * 0.28);
-  --orb-saturation: calc(1.6 + var(--orb-level) * 0.6);
+  --orb-brightness: calc(1.08 + var(--orb-level) * 0.28);
+  --orb-saturation: calc(1.7 + var(--orb-level) * 0.6);
 }
 
 /* ---------- Call stage (orb ↔ call HUD) ---------- */
@@ -1415,8 +1473,8 @@ button {
   z-index: 0;
   border-radius: inherit;
   background:
-    radial-gradient(180px circle at 50% 24%, rgba(129, 140, 248, 0.16), transparent 62%),
-    radial-gradient(160px circle at 78% 62%, rgba(89, 217, 196, 0.11), transparent 64%);
+    radial-gradient(180px circle at 50% 24%, rgba(107, 98, 242, 0.2), transparent 62%),
+    radial-gradient(160px circle at 78% 62%, rgba(184, 85, 231, 0.14), transparent 64%);
   /* Purely decorative: never let the overlay capture clicks. While invisible
      (opacity:0) it would otherwise still intercept pointer events, which ate
      clicks on nested controls like the computer-use End button. */
@@ -1460,6 +1518,9 @@ button {
   pointer-events: auto;
 }
 
+/* Dimension's "Floating Pill Bar" treatment — a translucent dark capsule with
+   a subtle nebula glow + backdrop blur. Sits on top of the user's other apps
+   without competing visually. */
 .app-shell[data-call="active"] .call-stage {
   width: 100%;
   height: 100%;
@@ -1468,10 +1529,15 @@ button {
   gap: 7px;
   padding: 7px;
   border-color: transparent;
-  border-radius: var(--radius-window);
-  background: linear-gradient(180deg, rgba(21, 23, 31, 0.94), rgba(9, 10, 15, 0.96));
-  box-shadow: none;
-  backdrop-filter: blur(18px) saturate(1.15);
+  border-radius: var(--radius-pill);
+  background:
+    radial-gradient(120% 200% at 0% 50%, rgba(107, 98, 242, 0.18), transparent 55%),
+    radial-gradient(120% 200% at 100% 50%, rgba(184, 85, 231, 0.12), transparent 55%),
+    linear-gradient(180deg, rgba(10, 10, 10, 0.92), rgba(3, 7, 25, 0.96));
+  box-shadow:
+    0 0 0 1px rgba(229, 229, 229, 0.08),
+    0 18px 48px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(20px) saturate(1.15);
 }
 
 .app-shell[data-call="active"] .call-stage::before {
@@ -1503,10 +1569,24 @@ button {
   height: 7px;
   border-radius: 50%;
   background: var(--danger);
+  box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.55);
+  animation: call-live-pulse 1.6s var(--ease-out) infinite;
+}
+
+@keyframes call-live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(255, 82, 82, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 82, 82, 0);
+  }
 }
 
 .call-timer {
-  font-family: "Space Grotesk", Geist, sans-serif;
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.84rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1528,7 +1608,7 @@ button {
     transform 340ms var(--ease-out);
 }
 
-/* End button — only during a live call */
+/* End button — Crimson Red ghost pill that lives inside the floating call bar. */
 .call-end {
   display: inline-flex;
   align-items: center;
@@ -1537,14 +1617,13 @@ button {
   height: 0;
   margin-top: 4px;
   padding: 0 14px;
-  border: 1px solid var(--danger-line);
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-radius: var(--radius-pill);
   color: var(--danger);
-  background:
-    radial-gradient(80% 120% at 50% 0%, rgba(255, 255, 255, 0.11), transparent 58%),
-    var(--danger-soft);
+  background: var(--danger-soft);
+  box-shadow: inset 0 0 0 1px var(--danger-line);
   cursor: pointer;
-  font-family: "Space Grotesk", Geist, sans-serif;
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -1556,7 +1635,7 @@ button {
     opacity 320ms var(--ease-out),
     transform 320ms var(--ease-out),
     background var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out);
+    box-shadow var(--dur) var(--ease-out);
 }
 
 .call-end-glyph {
@@ -1568,8 +1647,8 @@ button {
 
 .call-end:hover:not(:disabled),
 .call-end:focus-visible:not(:disabled) {
-  border-color: var(--danger);
-  background: rgba(244, 63, 94, 0.32);
+  background: rgba(255, 82, 82, 0.28);
+  box-shadow: inset 0 0 0 1px var(--danger);
 }
 
 .call-end:active:not(:disabled) {
@@ -1615,22 +1694,23 @@ button {
   width: 16px;
   height: 12px;
   border: 1.5px solid var(--accent);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
+  box-shadow: 0 0 10px rgba(0, 136, 255, 0.35);
 }
 
 .cu-title {
   flex: 1;
   color: var(--text);
-  font-family: "Space Grotesk", Geist, sans-serif;
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .cu-target {
-  padding: 2px 8px;
+  padding: 3px 10px;
   border: 1px solid var(--accent-line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--accent-bright);
   background: var(--accent-soft);
   font-size: 0.54rem;
@@ -1660,7 +1740,7 @@ button {
   max-width: 100%;
   overflow: hidden;
   color: var(--text-2);
-  font-family: "Space Grotesk", Geist, sans-serif;
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -1701,26 +1781,25 @@ button {
   height: 34px;
   margin: 0;
   padding: 0 12px;
-  border: 1px solid var(--danger-line);
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-radius: var(--radius-pill);
   color: var(--danger);
-  background:
-    radial-gradient(80% 120% at 50% 0%, rgba(255, 255, 255, 0.11), transparent 58%),
-    var(--danger-soft);
-  font-family: "Space Grotesk", Geist, sans-serif;
+  background: var(--danger-soft);
+  box-shadow: inset 0 0 0 1px var(--danger-line);
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   cursor: pointer;
   transition:
     background var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out);
+    box-shadow var(--dur) var(--ease-out);
 }
 
 .tool-activity-stop:hover:not(:disabled),
 .tool-activity-stop:focus-visible:not(:disabled) {
-  border-color: var(--danger);
-  background: rgba(244, 63, 94, 0.32);
+  background: rgba(255, 82, 82, 0.28);
+  box-shadow: inset 0 0 0 1px var(--danger);
 }
 
 .tool-activity-stop:disabled {
@@ -1731,7 +1810,7 @@ button {
 .status {
   margin: 0;
   color: var(--text-2);
-  font-family: "Space Grotesk", Geist, sans-serif;
+  font-family: Geist, "Inter", sans-serif;
   font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: -0.03em;
