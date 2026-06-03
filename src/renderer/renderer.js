@@ -71,6 +71,8 @@ let secretPrefetchPromise = null;
 let lastSecretPrefetchFailureAt = 0;
 const SECRET_EXPIRY_MARGIN_MS = 10_000;
 const SECRET_PREFETCH_COOLDOWN_MS = 5_000;
+// Must match the `.app-shell` opacity transition in styles.css.
+const SHELL_FADE_MS = 130;
 let audioLevelMonitor = null;
 let pendingHangup = false;
 let hangupFallbackTimer = null;
@@ -202,7 +204,7 @@ function setOpenAIConnected(connected) {
   }
 }
 
-function setCallActive(active, { inactiveWindowMode = "panel" } = {}) {
+function setCallActive(active, { inactiveWindowMode = "panel", onHidden } = {}) {
   if (isCallActive === active) {
     return;
   }
@@ -215,17 +217,25 @@ function setCallActive(active, { inactiveWindowMode = "panel" } = {}) {
   callLabelElement.textContent = active ? "End" : "Call";
   callEndButton.disabled = !active;
   callEndButton.tabIndex = active ? 0 : -1;
-  appShellElement.dataset.call = active ? "active" : "idle";
+  // The `data-call` swap resizes the call bar to fill the window, so it must run
+  // inside `switchShellLayout` (hidden during the async window resize) to avoid
+  // flashing the call pill — or the large idle orb — at the wrong window size.
+  // `onHidden` lets callers open/close the panel within that hidden phase too.
   if (active) {
     startCallTimer();
-    void setWindowMode("call");
     void setWindowFocusable(false);
-  } else {
-    stopCallTimer();
-    clearWaveform();
-    void setWindowFocusable(true);
-    void setWindowMode(inactiveWindowMode);
+    return switchShellLayout(async () => {
+      await onHidden?.();
+      appShellElement.dataset.call = "active";
+    }, "call");
   }
+  stopCallTimer();
+  clearWaveform();
+  void setWindowFocusable(true);
+  return switchShellLayout(async () => {
+    appShellElement.dataset.call = "idle";
+    await onHidden?.();
+  }, inactiveWindowMode);
 }
 
 async function setWindowFocusable(focusable) {
@@ -239,15 +249,58 @@ async function setWindowFocusable(focusable) {
   }
 }
 
-async function setWindowMode(mode) {
+async function setWindowMode(mode, options) {
   try {
-    await window.brah.setWindowMode(mode);
+    await window.brah.setWindowMode(mode, options);
   } catch (error) {
     await writeRendererDiagnostic("window.set_mode.error", {
       mode,
       ...formatRendererError(error),
     });
   }
+}
+
+// Fade the shell out, swap its layout + resize the window while it is invisible,
+// then fade back in. The window resize is async (IPC), so without this the new
+// layout (e.g. the call pill) paints for a frame or two at the old window size —
+// a stretched "oval" of the call bar across the panel footprint. Hiding the
+// content across the swap makes the transition seamless.
+async function switchShellLayout(applyLayout, mode) {
+  appShellElement.classList.add("is-switching");
+  await waitForShellFade();
+  // applyLayout runs entirely while the shell is invisible — this is where the
+  // panel is opened/closed so neither the large idle orb nor the panel ever
+  // paints at the wrong window size during the swap.
+  await applyLayout();
+  await setWindowMode(mode, { animate: false });
+  // Reveal on the next frame so the resized window has committed its new bounds
+  // before the content fades back in.
+  requestAnimationFrame(() => {
+    appShellElement.classList.remove("is-switching");
+  });
+}
+
+// Resolve once the shell's opacity transition has settled (or a safety timeout
+// elapses, so a dropped `transitionend` can never wedge the UI invisible).
+function waitForShellFade() {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      appShellElement.removeEventListener("transitionend", onEnd);
+      resolve();
+    };
+    const onEnd = (event) => {
+      if (event.target === appShellElement && event.propertyName === "opacity") {
+        finish();
+      }
+    };
+    appShellElement.addEventListener("transitionend", onEnd);
+    setTimeout(finish, SHELL_FADE_MS + 40);
+  });
 }
 
 function startCallTimer() {
@@ -433,6 +486,29 @@ async function connectOpenAI() {
   }
 }
 
+// Build a human-readable error from a failed `/v1/realtime/calls` response.
+// OpenAI returns a JSON `{ error: { message } }` body for client errors, but an
+// opaque plaintext "Internal Server Error" for 5xx — which is the signature of an
+// OAuth login whose underlying OpenAI org has no Platform billing/credits.
+async function describeRealtimeCallFailure(response) {
+  const body = await response.text();
+  let detail = body.trim();
+  try {
+    const message = JSON.parse(body)?.error?.message;
+    if (typeof message === "string" && message.trim()) {
+      detail = message.trim();
+    }
+  } catch {
+    // Non-JSON body (e.g. plaintext "Internal Server Error"); keep the raw text.
+  }
+  let hint = "";
+  if (response.status >= 500) {
+    hint =
+      " — the OpenAI account behind your login likely has no Platform billing/credits for Realtime.";
+  }
+  return `Realtime call failed (${response.status}): ${detail || "no response body"}${hint}`;
+}
+
 async function toggleCall() {
   if (peerConnection) {
     await stopCall();
@@ -543,12 +619,16 @@ async function startCall() {
 
   callToggleButton.disabled = true;
   headerCallButton.disabled = true;
-  // Hide the panel instantly (no fade) before resizing so the UI just
-  // disappears rather than morphing through a circle into the call pill.
-  if (panelController.isOpen()) {
-    await panelController.close({ immediate: true, skipWindowMode: true });
-  }
-  setCallActive(true);
+  // Close the panel inside the layout swap's hidden phase (not before it), so the
+  // large idle orb never flashes at panel size between the panel hiding and the
+  // call pill appearing. The panel fades out, then the call pill fades in.
+  void setCallActive(true, {
+    onHidden: async () => {
+      if (panelController.isOpen()) {
+        await panelController.close({ immediate: true, skipWindowMode: true });
+      }
+    },
+  });
   setStatus("Starting…");
   setMode("connecting");
   await writeRendererDiagnostic("call.start", {
@@ -628,7 +708,7 @@ async function startCall() {
     });
 
     if (!sdpResponse.ok) {
-      throw new Error(`Realtime call failed (${sdpResponse.status}): ${await sdpResponse.text()}`);
+      throw new Error(await describeRealtimeCallFailure(sdpResponse));
     }
 
     await peerConnection.setRemoteDescription({
@@ -688,7 +768,17 @@ async function stopCall() {
   realtimeToolHandler.reset();
   hideToolActivity();
   remoteAudioElement.srcObject = null;
-  setCallActive(false, { inactiveWindowMode: "panel" });
+  // Open the panel inside the swap's hidden phase so the call pill fades out
+  // straight into the panel — the large idle orb never flashes at panel size.
+  await setCallActive(false, {
+    inactiveWindowMode: "panel",
+    onHidden: async () => {
+      await panelController.open({ skipWindowMode: true });
+    },
+  });
+  // Defensive: if the call was already inactive (e.g. a second stopCall from the
+  // connection-state handler), setCallActive no-ops and its onHidden never runs.
+  // open() is idempotent, so this guarantees the panel is shown either way.
   await panelController.open();
   setMode("idle");
   setStatus(isOpenAIConnected ? "Ready" : "Connect OpenAI");

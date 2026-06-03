@@ -144,6 +144,14 @@ button {
   place-items: center;
   padding: 0;
   background: transparent;
+  /* Drives the seamless fade that hides the call/panel layout swap while the
+     window resizes (see switchShellLayout in renderer.js). Keep this duration
+     in sync with SHELL_FADE_MS. */
+  transition: opacity 130ms var(--ease-out);
+}
+
+.app-shell.is-switching {
+  opacity: 0;
 }
 
 .permissions-panel,

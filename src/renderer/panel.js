@@ -543,14 +543,18 @@ export function createPanelController({ brah, onModeChange } = {}) {
     }
   }
 
-  async function open() {
+  async function open({ skipWindowMode = false } = {}) {
     if (isOpen) {
       return;
     }
     isOpen = true;
     panelElement.hidden = false;
     onModeChange?.("panel");
-    await bridge.setWindowMode("panel");
+    // The caller (e.g. a call-end layout swap) may already be resizing the window
+    // to panel size; skip the redundant resize+fade so the two don't compound.
+    if (!skipWindowMode) {
+      await bridge.setWindowMode("panel");
+    }
     requestAnimationFrame(() => panelElement.classList.add("is-open"));
     renderTabs();
     await loadActiveTab();

@@ -228,7 +228,7 @@ function clampToVisibleArea(x, y, width, height) {
   return { x: Math.round(clampedX), y: Math.round(clampedY) };
 }
 
-async function setMainWindowMode(mode) {
+async function setMainWindowMode(mode, { animate = true } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return windowMode;
   }
@@ -238,7 +238,10 @@ async function setMainWindowMode(mode) {
   const currentBounds = mainWindow.getBounds();
   const sizeChanged =
     currentBounds.width !== targetBounds.width || currentBounds.height !== targetBounds.height;
-  if (sizeChanged) {
+  // When the renderer fades its own shell around the switch (`animate: false`),
+  // skip the native window fade: the content is already invisible during the
+  // resize, so a second fade only adds latency and a blank gap.
+  if (sizeChanged && animate) {
     await fadeMainWindowTo(0, 110);
   }
   // Pin BOTH min and max to the mode size. This frameless, transparent window
@@ -250,7 +253,7 @@ async function setMainWindowMode(mode) {
   // normal window so it can be sent behind other windows.
   mainWindow.setAlwaysOnTop(Boolean(target.alwaysOnTop));
   applyWindowBounds(targetBounds);
-  if (sizeChanged) {
+  if (sizeChanged && animate) {
     await fadeMainWindowTo(1, 130);
   }
   return windowMode;
@@ -405,7 +408,7 @@ ipcMain.handle("activity:list", (_event, kind) => listActivity(kind));
 ipcMain.handle("screenshots:list", () => listScreenshots());
 ipcMain.handle("screenshots:reveal", (_event, name) => revealScreenshot(name));
 ipcMain.handle("screenshots:delete", (_event, names) => deleteScreenshots(names));
-ipcMain.handle("window:set-mode", (_event, mode) => setMainWindowMode(mode));
+ipcMain.handle("window:set-mode", (_event, mode, options) => setMainWindowMode(mode, options));
 ipcMain.handle("window:set-focusable", (_event, focusable) => {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return false;

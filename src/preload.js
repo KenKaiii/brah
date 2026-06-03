@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld("brah", {
   revealScreenshot: (name) => ipcRenderer.invoke("screenshots:reveal", name),
   deleteScreenshots: (names) => ipcRenderer.invoke("screenshots:delete", names),
   getActivity: (kind) => ipcRenderer.invoke("activity:list", kind),
-  setWindowMode: (mode) => ipcRenderer.invoke("window:set-mode", mode),
+  setWindowMode: (mode, options) => ipcRenderer.invoke("window:set-mode", mode, options),
   setWindowFocusable: (focusable) => ipcRenderer.invoke("window:set-focusable", focusable),
   minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
   quitApp: () => ipcRenderer.invoke("app:quit"),
