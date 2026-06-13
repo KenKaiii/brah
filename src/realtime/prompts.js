@@ -47,6 +47,21 @@ export const REALTIME_VOICES = Object.freeze([
 
 export const DEFAULT_VOICE = "marin";
 
+export const REALTIME_MODELS = Object.freeze({
+  "gpt-realtime-2": {
+    label: "GPT Realtime 2",
+    costHint: "~$2.88/hr",
+    tier: "full",
+  },
+  "gpt-realtime-mini": {
+    label: "GPT Realtime Mini",
+    costHint: "~$0.90/hr",
+    tier: "mini",
+  },
+});
+
+export const DEFAULT_REALTIME_MODEL = "gpt-realtime-2";
+
 export const AGENT_PERSONAS = Object.freeze({
   default: {
     label: "Default",
@@ -82,6 +97,7 @@ export const DEFAULT_AGENT_PROFILE = Object.freeze({
   about: "",
   voice: DEFAULT_VOICE,
   persona: DEFAULT_PERSONA,
+  model: DEFAULT_REALTIME_MODEL,
 });
 
 export function buildWelcomeInstructions(profile = DEFAULT_AGENT_PROFILE) {
@@ -157,6 +173,7 @@ export function normalizeAgentProfile(profile) {
     about: typeof profile?.about === "string" ? profile.about.trim().slice(0, 1000) : "",
     voice: normalizeVoice(profile?.voice),
     persona: normalizePersona(profile?.persona),
+    model: normalizeModel(profile?.model),
   };
 }
 
@@ -166,6 +183,10 @@ function normalizeVoice(voice) {
 
 function normalizePersona(persona) {
   return typeof persona === "string" && persona in AGENT_PERSONAS ? persona : DEFAULT_PERSONA;
+}
+
+function normalizeModel(model) {
+  return typeof model === "string" && model in REALTIME_MODELS ? model : DEFAULT_REALTIME_MODEL;
 }
 
 function normalizeGoals(goals) {

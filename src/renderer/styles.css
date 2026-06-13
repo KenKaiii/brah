@@ -128,7 +128,8 @@ button {
 .panel[hidden],
 .app-menu[hidden],
 .permissions-panel[hidden],
-.agent-panel[hidden] {
+.agent-panel[hidden],
+.settings-panel[hidden] {
   display: none;
 }
 
@@ -156,6 +157,7 @@ button {
 
 .permissions-panel,
 .agent-panel,
+.settings-panel,
 .panel,
 .fab-orb,
 .call-end,
@@ -1047,7 +1049,8 @@ button {
 
 /* ---------- Permissions full view ---------- */
 .permissions-panel,
-.agent-panel {
+.agent-panel,
+.settings-panel {
   position: absolute;
   inset: 0;
   z-index: 6;
@@ -1137,6 +1140,43 @@ button {
   letter-spacing: 0.005em;
 }
 
+/* Settings has fewer, denser controls than the Agent form, so it gets a more
+   generous rhythm: hairline-separated sections with consistent vertical air
+   between label, control, and action row. */
+.settings-panel .agent-form {
+  gap: 0;
+  padding: 4px 13px 16px;
+}
+
+.settings-panel .agent-field {
+  gap: 10px;
+  padding: 18px 0;
+}
+
+.settings-panel .agent-field + .agent-field {
+  border-top: 1px solid var(--hairline);
+}
+
+.agent-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Mirrors .permission-actions: ghost buttons, 7px apart. */
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.settings-actions .agent-hint {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+}
+
 /* Frost pill for the primary save action — matches selection-done / header-call. */
 .agent-save {
   flex: none;
@@ -1218,7 +1258,8 @@ button {
 /* Dimension "Ghost Button" treatment — transparent face + hairline + pill radius.
    Shared by all header utility actions and permission item actions. */
 .view-header button:not(.view-back),
-.permission-actions button {
+.permission-actions button,
+.settings-actions button {
   padding: 5px 12px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
@@ -1235,10 +1276,17 @@ button {
 }
 
 .view-header button:not(.view-back):hover,
-.permission-actions button:hover {
+.permission-actions button:hover,
+.settings-actions button:hover {
   color: var(--text);
   border-color: var(--hairline-strong);
   background: var(--raised-hover);
+}
+
+.settings-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
 }
 
 .permission-item {
@@ -1600,6 +1648,44 @@ button {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   color: var(--text);
+}
+
+/* model badge — truthful indicator of the model the server is running.
+ * Pending (unconfirmed) is dim, mini is green, the full model is loud amber,
+ * and a server/selection mismatch turns it red. */
+.call-model {
+  padding: 1px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  font-family: Geist, "Inter", sans-serif;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.call-model[data-state="pending"] {
+  color: var(--text-3);
+  border-style: dashed;
+}
+
+.call-model[data-state="confirmed"][data-tier="mini"] {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.45);
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.call-model[data-state="confirmed"][data-tier="full"] {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.call-model[data-state="mismatch"] {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(248, 113, 113, 0.16);
 }
 
 /* waveform canvas — only during a live call */

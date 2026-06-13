@@ -2,6 +2,7 @@ import {
   AGENT_PERSONAS,
   buildWelcomeInstructions,
   normalizeAgentProfile,
+  REALTIME_MODELS,
   REALTIME_VOICES,
 } from "../realtime/prompts.js";
 import { initClickSound } from "./click-sound.js";
@@ -38,6 +39,15 @@ const agentAboutInput = document.querySelector("#agent-about");
 const agentGoalsInput = document.querySelector("#agent-goals");
 const agentVoiceSelect = document.querySelector("#agent-voice");
 const agentPersonaSelect = document.querySelector("#agent-persona");
+const settingsToggleButton = document.querySelector("#settings-toggle");
+const settingsPanelElement = document.querySelector("#settings-panel");
+const settingsBackButton = document.querySelector("#settings-back");
+const settingsModelSelect = document.querySelector("#settings-model");
+const apiKeyInput = document.querySelector("#api-key-input");
+const apiKeySaveButton = document.querySelector("#api-key-save");
+const apiKeyClearButton = document.querySelector("#api-key-clear");
+const apiKeyHintElement = document.querySelector("#api-key-hint");
+const apiKeyStatusElement = document.querySelector("#api-key-status");
 const agentStatusElement = document.querySelector("#agent-status");
 const callToggleButton = document.querySelector("#call-toggle");
 const headerCallButton = document.querySelector("#header-call");
@@ -45,6 +55,7 @@ const headerCallLabelElement = document.querySelector("#header-call-label");
 const callLabelElement = document.querySelector("#call-label");
 const callEndButton = document.querySelector("#call-end");
 const callTimerElement = document.querySelector("#call-timer");
+const callModelElement = document.querySelector("#call-model");
 const callWaveCanvas = document.querySelector("#call-wave");
 const remoteAudioElement = document.querySelector("#remote-audio");
 const toolActivityElement = document.querySelector("#tool-activity");
@@ -56,6 +67,9 @@ const toolActivityLabels = {
 };
 
 let isOpenAIConnected = false;
+// Latest `openai:get-status` payload (authMethod + masked API key state); used
+// for the footer indicator and the API key form, never holds the key itself.
+let openAIStatus = null;
 let peerConnection = null;
 let dataChannel = null;
 let localStream = null;
@@ -153,6 +167,75 @@ async function stopComputerUse() {
   }
 }
 
+// ---------- Call model badge (truthful model indicator) ----------
+// The badge never claims a model the server hasn't confirmed: it starts in a
+// "pending" state showing the minted model, and only locks in (or flips to a
+// mismatch warning) once `session.created` reports the actual server model.
+// `selectedCallModel` is the *user's profile selection* at call start — the
+// thing mismatches are judged against — not whatever the mint echoed back.
+let selectedCallModel = null;
+
+function modelTier(model) {
+  // Prefix-match so server-side dated aliases ("gpt-realtime-mini-2025-10-06")
+  // keep their real tier. Unknown models render with the loud "expensive"
+  // styling on purpose: never show the cheap green for something unidentified.
+  for (const [id, { tier }] of Object.entries(REALTIME_MODELS)) {
+    if (model === id || model.startsWith(`${id}-`)) {
+      return tier;
+    }
+  }
+  return "full";
+}
+
+function modelBadgeText(model) {
+  const name = shortModelName(model);
+  return modelTier(model) === "full" ? `${name} $$` : name;
+}
+
+function showCallModelPending(mintedModel) {
+  selectedCallModel = agentProfile.model;
+  const display = typeof mintedModel === "string" && mintedModel ? mintedModel : selectedCallModel;
+  callModelElement.hidden = false;
+  callModelElement.dataset.state = "pending";
+  callModelElement.dataset.tier = modelTier(display);
+  callModelElement.textContent = `${modelBadgeText(display)}?`;
+  callModelElement.title = "Model not yet confirmed by the server";
+}
+
+function confirmCallModel(serverModel) {
+  if (typeof serverModel !== "string" || !serverModel) {
+    // No model in the event: leave the badge pending rather than guessing.
+    return;
+  }
+  callModelElement.hidden = false;
+  callModelElement.dataset.tier = modelTier(serverModel);
+  // Tolerate server-side dated aliases (e.g. "gpt-realtime-mini-2025-10-06")
+  // resolving the requested model; anything else is a real mismatch.
+  const matches = selectedCallModel !== null && serverModel.startsWith(selectedCallModel);
+  if (matches) {
+    callModelElement.dataset.state = "confirmed";
+    callModelElement.textContent = modelBadgeText(serverModel);
+    callModelElement.title = `Server confirmed model: ${serverModel}`;
+    return;
+  }
+  callModelElement.dataset.state = "mismatch";
+  callModelElement.textContent = `⚠ ${modelBadgeText(serverModel)}`;
+  callModelElement.title = `Server is running ${serverModel}, not your selected ${selectedCallModel}`;
+  setStatus(`Model mismatch: ${shortModelName(serverModel)}`);
+  void writeRendererDiagnostic("realtime.model.mismatch", {
+    selected: selectedCallModel,
+    actual: serverModel,
+  });
+}
+
+function hideCallModelBadge() {
+  selectedCallModel = null;
+  callModelElement.hidden = true;
+  callModelElement.dataset.state = "pending";
+  callModelElement.textContent = "";
+  callModelElement.removeAttribute("title");
+}
+
 function requestHangup() {
   if (pendingHangup || !peerConnection) {
     return;
@@ -191,16 +274,17 @@ function setOrbLevel(level) {
 function setOpenAIConnected(connected) {
   isOpenAIConnected = connected;
   connectOpenAIButton.textContent = connected ? "Reconnect OpenAI" : "Connect OpenAI";
-  connectOpenAIButton.disabled = false;
-  openAIIndicatorElement.textContent = connected ? "Connected" : "Offline";
-  openAIIndicatorElement.dataset.connected = String(connected);
+  // OAuth realtime is broken upstream (see CLAUDE.md); the button stays
+  // disabled until that clears. API key is the working path.
+  connectOpenAIButton.disabled = true;
+  updateOpenAIIndicator();
   callToggleButton.disabled = !connected;
   headerCallButton.disabled = !connected;
   appShellElement.classList.toggle("is-authorized", connected);
   if (!connected) {
     invalidatePrefetchedSecret();
     setMode("idle");
-    setStatus("Connect OpenAI");
+    setStatus("Add an API key in Settings");
   }
 }
 
@@ -329,10 +413,81 @@ function updateCallTimer() {
 
 async function refreshOpenAIStatus() {
   const status = await window.brah.getOpenAIStatus();
+  openAIStatus = status;
   setOpenAIConnected(status.connected);
+  renderApiKeyState();
   if (status.connected) {
     setStatus("Ready");
     prefetchRealtimeSecret();
+  }
+}
+
+// Short, glanceable model name for the footer/badge ("mini", "realtime-2").
+function shortModelName(model) {
+  return typeof model === "string" ? model.replace(/^gpt-realtime-?/, "") || "realtime" : "?";
+}
+
+function updateOpenAIIndicator() {
+  openAIIndicatorElement.textContent = isOpenAIConnected ? "Connected" : "Offline";
+  openAIIndicatorElement.dataset.connected = String(isOpenAIConnected);
+}
+
+function renderApiKeyState() {
+  const keyState = openAIStatus?.apiKey;
+  const present = Boolean(keyState?.present);
+  apiKeyHintElement.textContent = present ? `…${keyState.last4}` : "";
+  apiKeyClearButton.disabled = !present;
+  // The key is verified against the API before it's ever saved, so a saved key
+  // is an authenticated one — "Connected" is truthful here.
+  apiKeyStatusElement.textContent = present ? "Connected" : "Not set";
+  apiKeyStatusElement.dataset.connected = String(present);
+}
+
+async function saveApiKey() {
+  const key = apiKeyInput.value.trim();
+  if (!key) {
+    return;
+  }
+  apiKeySaveButton.disabled = true;
+  apiKeyHintElement.textContent = "Verifying…";
+  try {
+    await window.brah.setOpenAIApiKey(key);
+    apiKeyInput.value = "";
+    // The auth used to mint is baked into the prefetched secret; re-prime.
+    invalidatePrefetchedSecret();
+    await refreshOpenAIStatus();
+  } catch (error) {
+    apiKeyHintElement.textContent = error.message;
+  } finally {
+    apiKeySaveButton.disabled = false;
+  }
+}
+
+async function clearApiKey() {
+  apiKeyClearButton.disabled = true;
+  try {
+    await window.brah.clearOpenAIApiKey();
+    invalidatePrefetchedSecret();
+    await refreshOpenAIStatus();
+  } catch (error) {
+    apiKeyHintElement.textContent = error.message;
+    apiKeyClearButton.disabled = false;
+  }
+}
+
+// Settings model changes persist immediately (no Save button in Settings); the
+// minted secret bakes the model in, so re-prime after a successful save.
+async function handleModelSelection() {
+  const previous = agentProfile.model;
+  try {
+    agentProfile = normalizeAgentProfile(
+      await window.brah.setAgentProfile({ ...agentProfile, model: settingsModelSelect.value }),
+    );
+    invalidatePrefetchedSecret();
+    prefetchRealtimeSecret();
+  } catch (error) {
+    settingsModelSelect.value = previous;
+    await writeRendererDiagnostic("settings.model.save_failed", formatRendererError(error));
   }
 }
 
@@ -363,6 +518,14 @@ function populateAgentOptions() {
       return option;
     }),
   );
+  settingsModelSelect.replaceChildren(
+    ...Object.entries(REALTIME_MODELS).map(([id, { label, costHint }]) => {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = `${label} (${costHint})`;
+      return option;
+    }),
+  );
 }
 
 function renderAgentProfile() {
@@ -371,6 +534,7 @@ function renderAgentProfile() {
   agentGoalsInput.value = agentProfile.goals.join("\n");
   agentVoiceSelect.value = agentProfile.voice;
   agentPersonaSelect.value = agentProfile.persona;
+  settingsModelSelect.value = agentProfile.model;
 }
 
 async function saveAgentProfile() {
@@ -380,6 +544,8 @@ async function saveAgentProfile() {
     goals: agentGoalsInput.value.split("\n"),
     voice: agentVoiceSelect.value,
     persona: agentPersonaSelect.value,
+    // The model lives in Settings, not the Agent form; preserve it as-is.
+    model: agentProfile.model,
   };
   agentStatusElement.textContent = "Saving\u2026";
   try {
@@ -472,15 +638,14 @@ async function connectOpenAI() {
       setOpenAIConnected(false);
     }
     await window.brah.loginOpenAI();
-    setOpenAIConnected(true);
+    // Re-pull the full status so the indicator reflects authMethod (a saved API
+    // key still wins over the fresh OAuth login for realtime calls).
+    await refreshOpenAIStatus();
     setMode("idle");
-    setStatus("Ready");
-    prefetchRealtimeSecret();
   } catch (error) {
     setOpenAIConnected(false);
     setStatus(`Connect failed: ${error.message}`);
   } finally {
-    connectOpenAIButton.disabled = false;
     callToggleButton.disabled = !isOpenAIConnected;
     headerCallButton.disabled = !isOpenAIConnected;
   }
@@ -501,12 +666,23 @@ async function describeRealtimeCallFailure(response) {
   } catch {
     // Non-JSON body (e.g. plaintext "Internal Server Error"); keep the raw text.
   }
-  let hint = "";
-  if (response.status >= 500) {
-    hint =
-      " — the OpenAI account behind your login likely has no Platform billing/credits for Realtime.";
+  return `Realtime call failed (${response.status}): ${detail || "no response body"}${realtimeCallFailureHint(response.status)}`;
+}
+
+function realtimeCallFailureHint(status) {
+  switch (status) {
+    case 401:
+      return " — your OpenAI login token is missing, expired, or invalid; sign in again.";
+    case 403:
+      return " — this OpenAI account isn't authorized for the Realtime API.";
+    case 429:
+      return " — rate limited or out of Realtime quota/credits; check Platform billing.";
+    default:
+      if (status >= 500) {
+        return " — OpenAI server error; this is on their side, try again shortly.";
+      }
+      return "";
   }
-  return `Realtime call failed (${response.status}): ${detail || "no response body"}${hint}`;
 }
 
 async function toggleCall() {
@@ -645,7 +821,12 @@ async function startCall() {
       acquireMicrophoneStream(),
     ]);
     localStream = stream;
-    await writeRendererDiagnostic("call.secret.created", { hasValue: Boolean(secret?.value) });
+    showCallModelPending(secret?.model);
+    await writeRendererDiagnostic("call.secret.created", {
+      hasValue: Boolean(secret?.value),
+      model: secret?.model,
+      authMethod: secret?.authMethod,
+    });
     await writeRendererDiagnostic("call.microphone.stream", describeMediaStream(localStream));
     startAudioLevelMonitor(localStream);
     void populateMicDevices();
@@ -767,6 +948,7 @@ async function stopCall() {
 
   realtimeToolHandler.reset();
   hideToolActivity();
+  hideCallModelBadge();
   remoteAudioElement.srcObject = null;
   // Open the panel inside the swap's hidden phase so the call pill fades out
   // straight into the panel — the large idle orb never flashes at panel size.
@@ -791,6 +973,10 @@ async function handleRealtimeEvent(event) {
   // The welcome greeting finished playing through the speakers — safe to listen.
   if (welcomeMicGuardTimer !== null && event.type === "output_audio_buffer.stopped") {
     endWelcomeMicGuard();
+  }
+  if (event.type === "session.created") {
+    // Ground truth for which model is actually running this call.
+    confirmCallModel(event.session?.model);
   }
   const queuedCreate = responseCoordinator.observe(event);
   if (queuedCreate) {
@@ -1330,8 +1516,22 @@ document.addEventListener("keydown", (event) => {
   }
 });
 connectOpenAIButton.addEventListener("click", () => {
-  setMenuOpen(false);
   void connectOpenAI();
+});
+settingsToggleButton.addEventListener("click", () => {
+  setMenuOpen(false);
+  settingsPanelElement.hidden = !settingsPanelElement.hidden;
+  if (!settingsPanelElement.hidden) {
+    apiKeyInput.value = "";
+    void refreshOpenAIStatus();
+    void loadAgentProfile();
+  }
+});
+settingsBackButton.addEventListener("click", () => {
+  settingsPanelElement.hidden = true;
+});
+settingsModelSelect.addEventListener("change", () => {
+  void handleModelSelection();
 });
 permissionsToggleButton.addEventListener("click", () => {
   setMenuOpen(false);
@@ -1354,6 +1554,12 @@ agentBackButton.addEventListener("click", () => {
 agentFormElement.addEventListener("submit", (event) => {
   event.preventDefault();
   void saveAgentProfile();
+});
+apiKeySaveButton.addEventListener("click", () => {
+  void saveApiKey();
+});
+apiKeyClearButton.addEventListener("click", () => {
+  void clearApiKey();
 });
 windowMinimizeButton.addEventListener("click", () => {
   setMenuOpen(false);

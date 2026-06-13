@@ -366,8 +366,35 @@ ipcMain.handle("update:check", async () => {
 });
 
 ipcMain.handle("openai:get-status", async () => {
-  const credentials = await getFreshOpenAICredentials();
-  return credentials ? credentialsToStatus(credentials) : { connected: false };
+  const [credentials, apiKey] = await Promise.all([
+    getFreshOpenAICredentials(),
+    loadOpenAIApiKey(),
+  ]);
+  const base = credentials ? credentialsToStatus(credentials) : { connected: false };
+  const authMethod = apiKey ? "api-key" : credentials ? "oauth" : null;
+  return {
+    ...base,
+    connected: Boolean(apiKey) || base.connected,
+    authMethod,
+    apiKey: apiKeyToStatus(apiKey),
+  };
+});
+
+ipcMain.handle("openai:set-api-key", async (_event, key) => {
+  const trimmed = typeof key === "string" ? key.trim() : "";
+  if (!isPlausibleOpenAIApiKey(trimmed)) {
+    throw new Error("That doesn't look like an OpenAI API key (expected sk-…).");
+  }
+  await verifyOpenAIApiKey(trimmed);
+  await saveOpenAIApiKey(trimmed);
+  await writeDiagnosticLog("openai.api_key.saved", { length: trimmed.length });
+  return apiKeyToStatus(trimmed);
+});
+
+ipcMain.handle("openai:clear-api-key", async () => {
+  await clearOpenAIApiKey();
+  await writeDiagnosticLog("openai.api_key.cleared", {});
+  return apiKeyToStatus(null);
 });
 
 ipcMain.handle("openai:login", async () => {
@@ -381,16 +408,21 @@ ipcMain.handle("openai:logout", async () => {
 });
 
 ipcMain.handle("openai:create-realtime-secret", async (_event, options = {}) => {
-  const credentials = await getFreshOpenAICredentials();
-  if (!credentials) {
-    throw new Error("Sign in to OpenAI before starting Realtime.");
+  // API key takes precedence over OAuth: it is the path users explicitly pay
+  // for, and the OAuth realtime route is currently broken upstream (CLAUDE.md).
+  const apiKey = await loadOpenAIApiKey();
+  const credentials = apiKey ? null : await getFreshOpenAICredentials();
+  if (!apiKey && !credentials) {
+    throw new Error("Add an API key or sign in to OpenAI before starting Realtime.");
   }
 
   const profile = loadAgentProfile();
-  return createRealtimeClientSecret(credentials, {
+  return createRealtimeClientSecret(apiKey ?? credentials.accessToken, {
     ...options,
+    model: profile.model,
     voice: profile.voice,
     instructions: buildRealtimeInstructions({ profile }),
+    authMethod: apiKey ? "api-key" : "oauth",
   });
 });
 
@@ -533,6 +565,10 @@ function cancelComputerUse() {
 }
 
 app.whenReady().then(() => {
+  if (process.env.BRAH_REALTIME_PROBE === "1") {
+    void runRealtimeProbe();
+    return;
+  }
   initializeDataStore();
   void startDiagnosticSession();
   wireUpdateEvents();
@@ -1213,14 +1249,15 @@ async function postOpenAIForm(body, label) {
   return parseJsonResponse(response, label);
 }
 
-async function createRealtimeClientSecret(credentials, options) {
+async function createRealtimeClientSecret(bearerToken, options) {
+  const session = buildRealtimeSessionConfig(options);
   const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${credentials.accessToken}`,
+      Authorization: `Bearer ${bearerToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ session: buildRealtimeSessionConfig(options) }),
+    body: JSON.stringify({ session }),
   });
   const raw = await parseJsonResponse(response, "Realtime client secret request");
   const value = typeof raw.value === "string" ? raw.value : undefined;
@@ -1228,9 +1265,14 @@ async function createRealtimeClientSecret(credentials, options) {
     throw new Error("Realtime client secret response did not include a value.");
   }
 
+  // Prefer the model the mint *response* reports over what we asked for, so the
+  // renderer's indicator reflects what the server actually provisioned.
+  const mintedModel = typeof raw.session?.model === "string" ? raw.session.model : session.model;
   return {
     value,
     expiresAt: parseExpiresAt(raw.expires_at),
+    model: mintedModel,
+    authMethod: options.authMethod ?? "oauth",
     raw,
   };
 }
@@ -1267,7 +1309,9 @@ function buildRealtimeSessionConfig(options) {
       },
     },
     max_output_tokens: 4096,
-    reasoning: { effort: "minimal" },
+    // `reasoning` is only accepted by gpt-realtime-2; gpt-realtime/-mini reject
+    // it with 400 "Unsupported option for this model" (probed 2026-06-13).
+    ...(model.startsWith("gpt-realtime-2") ? { reasoning: { effort: "minimal" } } : {}),
     tools: getRealtimeToolDefinitions(),
     tool_choice: "auto",
     tracing: "auto",
@@ -1285,6 +1329,70 @@ async function parseJsonResponse(response, label) {
   } catch {
     throw new Error(`${label} returned invalid JSON.`);
   }
+}
+
+async function runRealtimeProbe() {
+  const offer = [
+    "v=0",
+    "o=- 0 0 IN IP4 127.0.0.1",
+    "s=-",
+    "t=0 0",
+    "a=group:BUNDLE 0",
+    "m=audio 9 UDP/TLS/RTP/SAVPF 111",
+    "c=IN IP4 0.0.0.0",
+    "a=rtcp:9 IN IP4 0.0.0.0",
+    "a=ice-ufrag:abcd",
+    "a=ice-pwd:abcdefghijklmnopqrstuvwx",
+    "a=fingerprint:sha-256 00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF",
+    "a=setup:actpass",
+    "a=mid:0",
+    "a=sendrecv",
+    "a=rtcp-mux",
+    "a=rtpmap:111 opus/48000/2",
+    "",
+  ].join("\r\n");
+  const out = {};
+  try {
+    const credentials = await getFreshOpenAICredentials();
+    out.hasCredentials = !!credentials;
+    if (credentials) {
+      const model = realtimeDefaults.model;
+      const secret = await createRealtimeClientSecret(credentials.accessToken, { model });
+      out.mint = { ok: true, value: `${secret.value.slice(0, 8)}\u2026` };
+      const pub = await fetch(`https://api.openai.com/v1/realtime/calls?model=${model}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${secret.value}`, "Content-Type": "application/sdp" },
+        body: offer,
+      });
+      out.callPublic = {
+        status: pub.status,
+        location: pub.headers.get("location"),
+        body: (await pub.text()).slice(0, 200),
+      };
+      const back = await fetch("https://chatgpt.com/backend-api/codex/realtime/calls", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${credentials.accessToken}`,
+          "Content-Type": "application/json",
+          originator: "codex_cli_rs",
+          "User-Agent": "codex_cli_rs/0.0.0",
+        },
+        body: JSON.stringify({
+          sdp: offer,
+          session: { type: "realtime", model, instructions: "hi" },
+        }),
+      });
+      out.callBackend = {
+        status: back.status,
+        location: back.headers.get("location"),
+        body: (await back.text()).slice(0, 200),
+      };
+    }
+  } catch (error) {
+    out.error = String(error?.stack || error);
+  }
+  console.log(`BRAH_PROBE ${JSON.stringify(out)}`);
+  app.quit();
 }
 
 async function getFreshOpenAICredentials() {
@@ -1337,6 +1445,68 @@ async function clearOpenAICredentials() {
 
 function credentialsPath() {
   return path.join(app.getPath("userData"), "openai-credentials.json");
+}
+
+async function loadOpenAIApiKey() {
+  try {
+    const raw = await fs.readFile(apiKeyPath(), "utf8");
+    const payload = JSON.parse(raw);
+    const serialized = typeof payload.data === "string" ? payload.data : undefined;
+    if (!serialized) {
+      return null;
+    }
+    const key = safeStorage.isEncryptionAvailable()
+      ? safeStorage.decryptString(Buffer.from(serialized, "base64"))
+      : Buffer.from(serialized, "base64").toString("utf8");
+    return isPlausibleOpenAIApiKey(key) ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveOpenAIApiKey(key) {
+  if (!safeStorage.isEncryptionAvailable()) {
+    await writeDiagnosticLog("openai.api_key.encryption_unavailable", {
+      backend: safeStorage.getSelectedStorageBackend?.() ?? "unknown",
+    });
+    throw new Error(
+      "Secure credential storage is unavailable; refusing to store the API key in cleartext.",
+    );
+  }
+  await fs.mkdir(path.dirname(apiKeyPath()), { recursive: true });
+  const data = safeStorage.encryptString(key).toString("base64");
+  await fs.writeFile(apiKeyPath(), JSON.stringify({ data }, null, 2), { mode: 0o600 });
+}
+
+async function clearOpenAIApiKey() {
+  await fs.rm(apiKeyPath(), { force: true });
+}
+
+function apiKeyPath() {
+  return path.join(app.getPath("userData"), "openai-api-key.json");
+}
+
+function isPlausibleOpenAIApiKey(key) {
+  return typeof key === "string" && /^sk-[A-Za-z0-9_-]{20,}$/.test(key);
+}
+
+// Auth-only probe: lists models without consuming tokens, so a bad key fails
+// here instead of mid-call.
+async function verifyOpenAIApiKey(key) {
+  const response = await fetch("https://api.openai.com/v1/models", {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  if (response.ok) {
+    return;
+  }
+  if (response.status === 401) {
+    throw new Error("OpenAI rejected this API key (401). Check the key and try again.");
+  }
+  throw new Error(`API key verification failed (${response.status}).`);
+}
+
+function apiKeyToStatus(key) {
+  return key ? { present: true, last4: key.slice(-4) } : { present: false, last4: null };
 }
 
 function tokenJsonToCredentials(response, fallbackRefreshToken) {

@@ -4,8 +4,10 @@ import {
   AGENT_PERSONAS,
   buildAgentInstructions,
   DEFAULT_PERSONA,
+  DEFAULT_REALTIME_MODEL,
   DEFAULT_VOICE,
   normalizeAgentProfile,
+  REALTIME_MODELS,
   REALTIME_VOICES,
 } from "../src/realtime/prompts.js";
 
@@ -23,6 +25,26 @@ test("normalizeAgentProfile falls back to default persona for unknown values", (
 test("normalizeAgentProfile passes through valid voice and persona", () => {
   assert.equal(normalizeAgentProfile({ voice: "cedar" }).voice, "cedar");
   assert.equal(normalizeAgentProfile({ persona: "coach" }).persona, "coach");
+});
+
+test("normalizeAgentProfile falls back to default model for invalid values", () => {
+  assert.equal(normalizeAgentProfile({ model: "gpt-5" }).model, DEFAULT_REALTIME_MODEL);
+  assert.equal(normalizeAgentProfile({ model: 42 }).model, DEFAULT_REALTIME_MODEL);
+  assert.equal(normalizeAgentProfile({}).model, DEFAULT_REALTIME_MODEL);
+});
+
+test("normalizeAgentProfile passes through allowlisted models", () => {
+  assert.equal(normalizeAgentProfile({ model: "gpt-realtime-2" }).model, "gpt-realtime-2");
+  assert.equal(normalizeAgentProfile({ model: "gpt-realtime-mini" }).model, "gpt-realtime-mini");
+});
+
+test("realtime model allowlist contains both tiers with cost hints", () => {
+  assert.ok("gpt-realtime-2" in REALTIME_MODELS);
+  assert.ok("gpt-realtime-mini" in REALTIME_MODELS);
+  for (const model of Object.values(REALTIME_MODELS)) {
+    assert.equal(typeof model.label, "string");
+    assert.match(model.costHint, /\$\d/);
+  }
 });
 
 test("cedar is in the realtime voice allowlist", () => {

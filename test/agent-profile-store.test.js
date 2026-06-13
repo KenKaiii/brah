@@ -47,6 +47,19 @@ test("agent profile normalizes and persists name, about, and goals", async () =>
   });
 });
 
+test("agent profile persists the realtime model and rejects junk values", async () => {
+  await withProfileDb((filePath) => {
+    const saved = saveAgentProfile({ name: "Sam", model: "gpt-realtime-mini" }, filePath);
+    assert.equal(saved.model, "gpt-realtime-mini");
+
+    closeDatabase(filePath);
+    assert.equal(loadAgentProfile(filePath).model, "gpt-realtime-mini");
+
+    const junk = saveAgentProfile({ name: "Sam", model: "gpt-5-turbo" }, filePath);
+    assert.equal(junk.model, "gpt-realtime-2");
+  });
+});
+
 test("saving an empty profile clears name and goals", async () => {
   await withProfileDb((filePath) => {
     saveAgentProfile({ name: "Sam", about: "x", goals: ["A"] }, filePath);

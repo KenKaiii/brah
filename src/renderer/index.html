@@ -56,11 +56,11 @@
           </button>
         </header>
         <div id="app-menu" class="app-menu" hidden role="menu" aria-label="Brah menu">
-          <button id="connect-openai" type="button" class="menu-item" role="menuitem">
-            Connect OpenAI
-          </button>
           <button id="agent-toggle" type="button" class="menu-item" role="menuitem">
             Agent
+          </button>
+          <button id="settings-toggle" type="button" class="menu-item" role="menuitem">
+            Settings
           </button>
           <button id="permissions-toggle" type="button" class="menu-item" role="menuitem">
             Permissions
@@ -163,6 +163,61 @@
             <button id="agent-save" type="submit" form="agent-form" class="agent-save">Save</button>
           </footer>
         </section>
+        <section id="settings-panel" class="settings-panel" hidden aria-label="Settings">
+          <div class="view-header">
+            <button id="settings-back" type="button" class="view-back" aria-label="Back">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                <path
+                  d="M15 5l-7 7 7 7"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <strong class="view-title">Settings</strong>
+          </div>
+          <div class="agent-form" role="group" aria-label="Settings fields">
+            <label class="agent-field">
+              <span class="agent-label">Model</span>
+              <select id="settings-model" class="agent-select"></select>
+            </label>
+            <div class="agent-field">
+              <span class="agent-label-row">
+                <span class="agent-label">API key</span>
+                <span
+                  id="api-key-status"
+                  class="openai-indicator"
+                  data-connected="false"
+                  role="status"
+                  >Not set</span
+                >
+              </span>
+              <input
+                id="api-key-input"
+                type="password"
+                class="agent-input"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="sk-…"
+                aria-label="OpenAI API key"
+              />
+              <div class="settings-actions">
+                <button id="api-key-save" type="button">Save</button>
+                <button id="api-key-clear" type="button">Clear</button>
+                <span id="api-key-hint" class="agent-hint" role="status" aria-live="polite"></span>
+              </div>
+            </div>
+            <div class="agent-field">
+              <span class="agent-label">OAuth</span>
+              <div class="settings-actions">
+                <button id="connect-openai" type="button" disabled>Connect OpenAI</button>
+              </div>
+              <span class="agent-hint">Currently unavailable due to OpenAI changes.</span>
+            </div>
+          </div>
+        </section>
         <nav id="panel-tabs" class="panel-tabs" role="tablist" aria-label="Activity tabs"></nav>
         <div id="panel-body" class="panel-body" role="tabpanel"></div>
         <footer id="panel-footer" class="panel-footer">
@@ -204,6 +259,7 @@
         <div id="call-meta" class="call-meta" aria-hidden="true">
           <span class="call-live"></span>
           <span id="call-timer" class="call-timer">0:00</span>
+          <span id="call-model" class="call-model" data-state="pending" hidden></span>
         </div>
         <button id="call-toggle" type="button" class="fab-orb" disabled aria-pressed="false">
           <span class="orb-shadow" aria-hidden="true"></span>

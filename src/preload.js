@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld("brah", {
   getOpenAIStatus: () => ipcRenderer.invoke("openai:get-status"),
   loginOpenAI: () => ipcRenderer.invoke("openai:login"),
   logoutOpenAI: () => ipcRenderer.invoke("openai:logout"),
+  setOpenAIApiKey: (key) => ipcRenderer.invoke("openai:set-api-key", key),
+  clearOpenAIApiKey: () => ipcRenderer.invoke("openai:clear-api-key"),
   createRealtimeSecret: (options) => ipcRenderer.invoke("openai:create-realtime-secret", options),
   getAgentProfile: () => ipcRenderer.invoke("agent:get-profile"),
   setAgentProfile: (profile) => ipcRenderer.invoke("agent:set-profile", profile),
