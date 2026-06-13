@@ -128,6 +128,32 @@ function handleToolEnd(name) {
   if (!stoppableTools.has(name)) {
     waitingSound.stop();
   }
+  if (memoryMutatingTools.has(name)) {
+    void refreshSessionMemory();
+  }
+}
+
+// Tools that change stored facts. After one runs mid-call we re-inject the
+// refreshed "Long-Term Memory" block via session.update so the just-saved or
+// updated facts stay authoritative for the rest of the call.
+const memoryMutatingTools = new Set(["remember", "update_fact", "forget", "daily_log"]);
+
+async function refreshSessionMemory() {
+  if (!isCallActive || dataChannel?.readyState !== "open") {
+    return;
+  }
+  try {
+    const instructions = await window.brah.getRealtimeInstructions();
+    if (typeof instructions !== "string" || !instructions.trim()) {
+      return;
+    }
+    sendRealtimeDataChannelEvent({
+      type: "session.update",
+      session: { type: "realtime", instructions },
+    });
+  } catch (error) {
+    void writeRendererDiagnostic("realtime.memory_refresh_failed", formatRendererError(error));
+  }
 }
 
 function showToolActivity(name) {

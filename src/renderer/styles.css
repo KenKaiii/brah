@@ -472,6 +472,40 @@ button {
   box-shadow: none;
 }
 
+/* ---------- Memory sub-tabs ---------- */
+.panel-subtabs {
+  display: flex;
+  gap: 4px;
+  margin: 2px 13px 0;
+  padding: 0 1px;
+}
+
+.panel-subtab {
+  padding: 4px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  color: var(--text-2);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition:
+    color var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+
+.panel-subtab:hover {
+  color: var(--text);
+}
+
+.panel-subtab.is-active {
+  color: var(--text);
+  border-color: var(--text-3);
+  background: var(--surface-translucent);
+}
+
 /* ---------- Body ---------- */
 .panel-body {
   flex: 1;

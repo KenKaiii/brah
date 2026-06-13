@@ -32,8 +32,21 @@ import {
   recordActivity,
 } from "./realtime/tools/activity-store.js";
 import { loadAgentProfile, saveAgentProfile } from "./realtime/tools/agent-profile-store.js";
+import {
+  deleteDailyLog,
+  getAllDailyLogs,
+  getDailyLogsContext,
+  pruneOldDailyLogs,
+} from "./realtime/tools/daily-logs-store.js";
 import { setDatabaseUserDataPath } from "./realtime/tools/database.js";
 import { executeRealtimeTool, getRealtimeToolDefinitions } from "./realtime/tools/index.js";
+import {
+  decayFactImportance,
+  deleteFact,
+  getAllFacts,
+  getFactsForContext,
+  getFactsMemoryUsage,
+} from "./realtime/tools/memory-store.js";
 import {
   loadMicrophoneDeviceId,
   saveMicrophoneDeviceId,
@@ -421,7 +434,11 @@ ipcMain.handle("openai:create-realtime-secret", async (_event, options = {}) => 
     ...options,
     model: profile.model,
     voice: profile.voice,
-    instructions: buildRealtimeInstructions({ profile }),
+    instructions: buildRealtimeInstructions({
+      profile,
+      memoryContext: loadMemoryContext(),
+      dailyLogsContext: loadDailyLogsContext(),
+    }),
     authMethod: apiKey ? "api-key" : "oauth",
   });
 });
@@ -437,6 +454,21 @@ ipcMain.handle("planner:delete-tasks", (_event, ids) => deletePlannerTasks(ids))
 ipcMain.handle("planner:complete-tasks", (_event, ids) => completePlannerTasks(ids));
 ipcMain.handle("planner:delete-calendar-items", (_event, ids) => deletePlannerCalendarItems(ids));
 ipcMain.handle("activity:list", (_event, kind) => listActivity(kind));
+ipcMain.handle("memory:list-facts", () => getAllFacts());
+ipcMain.handle("memory:delete-facts", (_event, ids) => deleteMemoryFacts(ids));
+ipcMain.handle("memory:list-daily-logs", () => getAllDailyLogs());
+ipcMain.handle("memory:delete-daily-logs", (_event, ids) => deleteDailyLogs(ids));
+// Fresh realtime instructions with the current memory baked in. The renderer
+// uses this to push a mid-call session.update after the agent mutates memory,
+// so facts/logs saved during a call become actively known for the rest of it
+// (mirrors pocket-agent rebuilding the system prompt each turn).
+ipcMain.handle("realtime:get-instructions", () =>
+  buildRealtimeInstructions({
+    profile: loadAgentProfile(),
+    memoryContext: loadMemoryContext(),
+    dailyLogsContext: loadDailyLogsContext(),
+  }),
+);
 ipcMain.handle("screenshots:list", () => listScreenshots());
 ipcMain.handle("screenshots:reveal", (_event, name) => revealScreenshot(name));
 ipcMain.handle("screenshots:delete", (_event, names) => deleteScreenshots(names));
@@ -606,6 +638,18 @@ function initializeDataStore() {
     safeConsole("warn", "Legacy store migration failed", error);
   }
   try {
+    // Pocket-agent-style importance decay: demote facts not accessed recently.
+    decayFactImportance();
+  } catch (error) {
+    safeConsole("warn", "Fact importance decay failed", error);
+  }
+  try {
+    // Pocket-agent-style retention: keep only a rolling window of daily logs.
+    pruneOldDailyLogs();
+  } catch (error) {
+    safeConsole("warn", "Daily log pruning failed", error);
+  }
+  try {
     userWindowPosition = loadWindowPosition();
   } catch (error) {
     safeConsole("warn", "Failed to load window position", error);
@@ -635,6 +679,12 @@ function categoryForTool(name) {
     case "take_screenshot":
     case "analyze_screen":
       return "screenshots";
+    case "remember":
+    case "forget":
+    case "update_fact":
+      return "memory";
+    case "daily_log":
+      return "daily";
     case "web_search":
     case "web_fetch":
       return "web";
@@ -719,6 +769,57 @@ function deletePlannerCalendarItems(ids) {
   let deleted = 0;
   for (const id of toIdList(ids)) {
     if (deleteCalendarItem(id).status === "deleted") {
+      deleted += 1;
+    }
+  }
+  return { status: "ok", deleted };
+}
+
+function deleteMemoryFacts(ids) {
+  let deleted = 0;
+  for (const id of toIdList(ids)) {
+    const numericId = Number(id);
+    if (Number.isInteger(numericId) && deleteFact(numericId)) {
+      deleted += 1;
+    }
+  }
+  return { status: "ok", deleted };
+}
+
+function loadMemoryContext() {
+  try {
+    const facts = getFactsForContext();
+    if (!facts) {
+      return "";
+    }
+    // Mirror pocket-agent's curator model: when the store nears its char budget,
+    // tell the agent to tidy memory itself (merge/forget) rather than relying on
+    // an automated consolidation pass.
+    const usage = getFactsMemoryUsage();
+    if (usage.pct >= 80) {
+      return `${facts}\n\n_Memory is ${usage.pct}% full (${usage.usedChars}/${usage.budgetChars} chars). Consolidate overlapping facts and forget stale ones to stay under budget._`;
+    }
+    return facts;
+  } catch (error) {
+    safeConsole("warn", "Failed to load memory facts for context", error);
+    return "";
+  }
+}
+
+function loadDailyLogsContext() {
+  try {
+    return getDailyLogsContext();
+  } catch (error) {
+    safeConsole("warn", "Failed to load daily logs for context", error);
+    return "";
+  }
+}
+
+function deleteDailyLogs(ids) {
+  let deleted = 0;
+  for (const id of toIdList(ids)) {
+    const numericId = Number(id);
+    if (Number.isInteger(numericId) && deleteDailyLog(numericId)) {
       deleted += 1;
     }
   }

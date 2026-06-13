@@ -150,6 +150,16 @@ export function formatToolStatus(name) {
     case "list_calendar_items":
     case "delete_calendar_item":
       return "Using calendar…";
+    case "remember":
+      return "Remembering…";
+    case "forget":
+      return "Forgetting…";
+    case "list_facts":
+    case "update_fact":
+    case "recall_memory":
+      return "Using memory…";
+    case "daily_log":
+      return "Journaling…";
     default:
       return "Using tool…";
   }

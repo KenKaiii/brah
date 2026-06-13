@@ -2,8 +2,15 @@ const tabs = Object.freeze([
   { id: "tasks", label: "Tasks", category: "tasks" },
   { id: "calendar", label: "Calendar", category: "calendar" },
   { id: "screenshots", label: "Shots", category: "screenshots" },
-  { id: "web", label: "Web", category: "web" },
+  { id: "memory", label: "Memory", category: "memory" },
   { id: "computer", label: "Computer", category: "computer" },
+]);
+
+// Sub-tabs shown inside the Memory tab. "facts" maps to the facts store and
+// "daily" to the daily logs store; each refreshes on its own data category.
+const memorySubTabs = Object.freeze([
+  { id: "facts", label: "Facts", category: "memory" },
+  { id: "daily", label: "Daily logs", category: "daily" },
 ]);
 
 const MAX_ACTIVITY_ITEMS = 20;
@@ -19,11 +26,13 @@ export function createPanelController({ brah, onModeChange } = {}) {
   const bridge = brah ?? window.brah;
   const panelElement = document.querySelector("#panel");
   const tabsElement = document.querySelector("#panel-tabs");
+  const subTabsElement = document.querySelector("#panel-subtabs");
   const bodyElement = document.querySelector("#panel-body");
   const footerElement = document.querySelector("#panel-footer-text");
 
   let isOpen = false;
   let activeTabId = tabs[0].id;
+  let activeMemorySubTabId = memorySubTabs[0].id;
   let dataChangedListener = null;
   let selectionBar = null;
   let selectionCountElement = null;
@@ -31,8 +40,9 @@ export function createPanelController({ brah, onModeChange } = {}) {
   let animateNextRender = true;
   const selectedIds = new Set();
 
-  // Tabs whose items support multi-select + delete.
-  const selectableTabs = Object.freeze(new Set(["tasks", "calendar", "screenshots"]));
+  // Tabs whose items support multi-select + delete. The Memory tab is selectable
+  // through either of its sub-tabs (facts or daily logs).
+  const selectableTabs = Object.freeze(new Set(["tasks", "calendar", "screenshots", "memory"]));
 
   function renderTabs() {
     tabsElement.replaceChildren(
@@ -52,6 +62,36 @@ export function createPanelController({ brah, onModeChange } = {}) {
   function selectTab(tabId) {
     activeTabId = tabId;
     renderTabs();
+    renderSubTabs();
+    void loadActiveTab();
+  }
+
+  // The Memory tab hosts its own segmented sub-tab bar; it stays hidden for
+  // every other top-level tab.
+  function renderSubTabs() {
+    const showSubTabs = activeTabId === "memory";
+    subTabsElement.hidden = !showSubTabs;
+    if (!showSubTabs) {
+      subTabsElement.replaceChildren();
+      return;
+    }
+    subTabsElement.replaceChildren(
+      ...memorySubTabs.map((subTab) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `panel-subtab${subTab.id === activeMemorySubTabId ? " is-active" : ""}`;
+        button.textContent = subTab.label;
+        button.setAttribute("role", "tab");
+        button.setAttribute("aria-selected", String(subTab.id === activeMemorySubTabId));
+        button.addEventListener("click", () => selectMemorySubTab(subTab.id));
+        return button;
+      }),
+    );
+  }
+
+  function selectMemorySubTab(subTabId) {
+    activeMemorySubTabId = subTabId;
+    renderSubTabs();
     void loadActiveTab();
   }
 
@@ -71,8 +111,12 @@ export function createPanelController({ brah, onModeChange } = {}) {
         renderCalendar(await bridge.getCalendarItems());
       } else if (tab.id === "screenshots") {
         renderScreenshots(await bridge.listScreenshots());
-      } else if (tab.id === "web") {
-        renderWeb(await bridge.getActivity("web_search"), await bridge.getActivity("web_fetch"));
+      } else if (tab.id === "memory") {
+        if (activeMemorySubTabId === "daily") {
+          renderDailyLogs(await bridge.getDailyLogs());
+        } else {
+          renderMemory(await bridge.getMemoryFacts());
+        }
       } else if (tab.id === "computer") {
         renderComputer(await bridge.getActivity("computer_use"));
       }
@@ -189,6 +233,12 @@ export function createPanelController({ brah, onModeChange } = {}) {
       await bridge.deleteCalendarItems(ids);
     } else if (activeTabId === "screenshots") {
       await bridge.deleteScreenshots(ids);
+    } else if (activeTabId === "memory") {
+      if (activeMemorySubTabId === "daily") {
+        await bridge.deleteDailyLogs(ids);
+      } else {
+        await bridge.deleteMemoryFacts(ids);
+      }
     }
     await loadActiveTab({ animate: false });
   }
@@ -380,70 +430,118 @@ export function createPanelController({ brah, onModeChange } = {}) {
     setFooter(`${list.length} ${list.length === 1 ? "screenshot" : "screenshots"}`);
   }
 
-  function renderWeb(searches, fetches) {
-    const searchList = (Array.isArray(searches) ? searches : []).slice(0, MAX_ACTIVITY_ITEMS);
-    const fetchList = (Array.isArray(fetches) ? fetches : []).slice(0, MAX_ACTIVITY_ITEMS);
-    if (searchList.length === 0 && fetchList.length === 0) {
-      mountBody(buildEmptyState("No web activity", "Ask Brah to search or read a page."));
-      setFooter("No web activity");
+  // Memory facts render the pocket-agent way: grouped by category, each fact
+  // shown as subject + content with its "as of" (updated) date.
+  function renderMemory(facts) {
+    const list = Array.isArray(facts) ? facts : [];
+    if (list.length === 0) {
+      mountBody(
+        buildEmptyState("Your memory is empty", "Tell Brah things and he'll remember them."),
+      );
+      setFooter("No memories");
       return;
     }
-    const sections = [];
-    if (searchList.length > 0) {
-      sections.push(buildSectionHeader("Searches"));
-      for (const entry of searchList) {
-        sections.push(buildSearchRow(entry));
+    const sorted = [...list].sort(
+      (a, b) =>
+        String(a.category).localeCompare(String(b.category)) ||
+        String(a.subject).localeCompare(String(b.subject)),
+    );
+    const groups = new Map();
+    for (const fact of sorted) {
+      const label = fact.category || "uncategorized";
+      if (!groups.has(label)) {
+        groups.set(label, []);
       }
+      groups.get(label).push(fact);
     }
-    if (fetchList.length > 0) {
-      sections.push(buildSectionHeader("Reads"));
-      for (const entry of fetchList) {
-        sections.push(buildFetchRow(entry));
+    const sections = [];
+    for (const [label, groupFacts] of groups) {
+      sections.push(buildSectionHeader(label));
+      for (const fact of groupFacts) {
+        sections.push(buildMemoryRow(fact));
       }
     }
     mountBody(...sections);
-    setFooter(`${searchList.length + fetchList.length} items`);
+    setFooter(`${list.length} ${list.length === 1 ? "memory" : "memories"}`);
   }
 
-  function buildSearchRow(entry) {
+  function buildMemoryRow(fact) {
     const row = document.createElement("article");
     row.className = "panel-row panel-row-block";
     const title = document.createElement("div");
     title.className = "panel-row-title";
-    title.textContent = entry.query || "Search";
+    title.textContent = fact.subject || fact.category || "Fact";
     row.append(title);
-    const results = Array.isArray(entry.results) ? entry.results.slice(0, 3) : [];
-    for (const result of results) {
-      const link = document.createElement("p");
-      link.className = "panel-row-subtext";
-      link.textContent = result.title ? `${result.title} — ${result.url}` : result.url;
-      row.append(link);
+    if (fact.content) {
+      const content = document.createElement("p");
+      content.className = "panel-row-subtext";
+      content.textContent = fact.content;
+      row.append(content);
     }
-    row.append(buildMeta(formatTime(entry.time)));
-    return row;
+    const metaParts = [formatTime(fact.updated_at)].filter(Boolean);
+    if (fact.sensitive) {
+      metaParts.push("sensitive");
+    }
+    if (metaParts.length > 0) {
+      row.append(buildMeta(metaParts.join(" · ")));
+    }
+    return makeSelectable(row, String(fact.id));
   }
 
-  function buildFetchRow(entry) {
+  // Daily logs render the pocket-agent way: one card per day (most recent first),
+  // each timestamped entry on its own line.
+  function renderDailyLogs(logs) {
+    const list = Array.isArray(logs) ? logs : [];
+    if (list.length === 0) {
+      mountBody(
+        buildEmptyState("No daily logs yet", "Brah journals what you work on as you talk."),
+      );
+      setFooter("No logs");
+      return;
+    }
+    const rows = list.map((log) => buildDailyLogRow(log));
+    mountBody(...rows);
+    setFooter(`${list.length} ${list.length === 1 ? "day" : "days"}`);
+  }
+
+  function buildDailyLogRow(log) {
     const row = document.createElement("article");
     row.className = "panel-row panel-row-block";
     const title = document.createElement("div");
     title.className = "panel-row-title";
-    title.textContent = entry.title || entry.url || "Page";
+    title.textContent = formatLogDate(log.date);
     row.append(title);
-    if (entry.url) {
-      const url = document.createElement("p");
-      url.className = "panel-row-subtext panel-row-url";
-      url.textContent = entry.url;
-      row.append(url);
+    const entries = String(log.content ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    for (const entry of entries) {
+      const line = document.createElement("p");
+      line.className = "panel-row-subtext";
+      line.textContent = entry;
+      row.append(line);
     }
-    if (entry.text) {
-      const excerpt = document.createElement("p");
-      excerpt.className = "panel-row-subtext";
-      excerpt.textContent = entry.text;
-      row.append(excerpt);
+    return makeSelectable(row, String(log.id));
+  }
+
+  function formatLogDate(date) {
+    if (typeof date !== "string" || !date) {
+      return "Log";
     }
-    row.append(buildMeta(formatTime(entry.time)));
-    return row;
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    if (date === todayKey) {
+      return "Today";
+    }
+    const parsed = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      return date;
+    }
+    return parsed.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
   }
 
   function renderComputer(runs) {
@@ -537,8 +635,13 @@ export function createPanelController({ brah, onModeChange } = {}) {
     if (!isOpen) {
       return;
     }
-    const activeTab = tabs.find((tab) => tab.id === activeTabId);
-    if (!payload?.category || payload.category === activeTab?.category) {
+    // On the Memory tab, the live category depends on the active sub-tab
+    // (facts vs. daily logs), so a change only refreshes the matching section.
+    const activeCategory =
+      activeTabId === "memory"
+        ? memorySubTabs.find((subTab) => subTab.id === activeMemorySubTabId)?.category
+        : tabs.find((tab) => tab.id === activeTabId)?.category;
+    if (!payload?.category || payload.category === activeCategory) {
       void loadActiveTab();
     }
   }
@@ -557,6 +660,7 @@ export function createPanelController({ brah, onModeChange } = {}) {
     }
     requestAnimationFrame(() => panelElement.classList.add("is-open"));
     renderTabs();
+    renderSubTabs();
     await loadActiveTab();
   }
 
@@ -587,6 +691,7 @@ export function createPanelController({ brah, onModeChange } = {}) {
 
   function init({ openByDefault = false } = {}) {
     renderTabs();
+    renderSubTabs();
     dataChangedListener = bridge.onDataChanged?.(handleDataChanged) ?? null;
     if (openByDefault) {
       void open();

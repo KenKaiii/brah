@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   AGENT_PERSONAS,
   buildAgentInstructions,
+  buildRealtimeInstructions,
   DEFAULT_PERSONA,
   DEFAULT_REALTIME_MODEL,
   DEFAULT_VOICE,
@@ -61,4 +62,48 @@ test("buildAgentInstructions injects the persona block for non-default personas"
 test("buildAgentInstructions omits persona block for default persona", () => {
   const instructions = buildAgentInstructions({ persona: "default" });
   assert.doesNotMatch(instructions, /# Persona/);
+});
+
+test("buildRealtimeInstructions injects saved facts as a Long-Term Memory section", () => {
+  const memoryContext = "## Known Facts\n\n### people\n- **partner_name**: Sam";
+  const instructions = buildRealtimeInstructions({ memoryContext });
+  assert.match(instructions, /# Long-Term Memory/);
+  assert.ok(instructions.includes(memoryContext));
+});
+
+test("buildRealtimeInstructions omits the memory section when there are no facts", () => {
+  const instructions = buildRealtimeInstructions({ memoryContext: "" });
+  assert.doesNotMatch(instructions, /# Long-Term Memory/);
+  assert.doesNotMatch(instructions, /## Known Facts/);
+});
+
+test("buildRealtimeInstructions injects recent daily logs as their own section", () => {
+  const dailyLogsContext = "## Recent Daily Logs\n\n### Today\n[10:00 AM] Shipped daily logs";
+  const instructions = buildRealtimeInstructions({ dailyLogsContext });
+  assert.match(instructions, /# Recent Daily Logs/);
+  assert.ok(instructions.includes(dailyLogsContext));
+});
+
+test("buildRealtimeInstructions omits the daily logs section when there are none", () => {
+  const instructions = buildRealtimeInstructions({ dailyLogsContext: "" });
+  assert.doesNotMatch(instructions, /# Recent Daily Logs/);
+});
+
+test("agent instructions include daily log guidance", () => {
+  const instructions = buildAgentInstructions({});
+  assert.match(instructions, /# Daily Log/);
+  assert.match(instructions, /Use daily_log to journal/);
+});
+
+test("agent instructions tell the model to save memory proactively and silently", () => {
+  const instructions = buildAgentInstructions({});
+  assert.match(instructions, /# Memory — You Own It/);
+  // Proactive, no-confirmation saving is the core behavior the user asked for.
+  assert.match(instructions, /Save with remember IMMEDIATELY and silently/);
+  assert.match(instructions, /Run local tools silently and proactively/);
+});
+
+test("confirmation guidance excludes routine local memory/task/calendar actions", () => {
+  const instructions = buildAgentInstructions({});
+  assert.match(instructions, /Routine local actions \(tasks, calendar, memory/);
 });
