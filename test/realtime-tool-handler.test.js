@@ -182,7 +182,7 @@ test("tool handler sends screenshot image as explicit response input", async () 
       output_modalities: ["audio"],
       input: [realtimeInput],
       instructions:
-        "Analyze the attached screenshot now and answer Ken directly. Do not say you are waiting for a screen read; the image is attached to this response input.",
+        "Analyze the attached screenshot now and answer the user directly. Do not say you are waiting for a screen read; the image is attached to this response input.",
     },
   });
 });

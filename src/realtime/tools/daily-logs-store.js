@@ -1,7 +1,7 @@
 import { getDatabase, getDatabasePath } from "./database.js";
 
 // Daily logs store, ported from pocket-agent's daily-logs.ts. The agent journals
-// what Ken worked on, talked about, decided, or how he seemed via the daily_log
+// what the user worked on, talked about, decided, or how they seemed via the daily_log
 // tool. Recent logs are injected into the session for continuity and pruned to a
 // rolling window. Rollups/embeddings from pocket-agent are intentionally omitted
 // (they need an LLM summarizer + embedding pipeline Brah doesn't have).

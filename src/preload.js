@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld("brah", {
   deleteMemoryFacts: (ids) => ipcRenderer.invoke("memory:delete-facts", ids),
   getDailyLogs: () => ipcRenderer.invoke("memory:list-daily-logs"),
   deleteDailyLogs: (ids) => ipcRenderer.invoke("memory:delete-daily-logs", ids),
+  extractMemory: (transcript) => ipcRenderer.invoke("memory:extract", transcript),
   getRealtimeInstructions: () => ipcRenderer.invoke("realtime:get-instructions"),
   setWindowMode: (mode, options) => ipcRenderer.invoke("window:set-mode", mode, options),
   setWindowFocusable: (focusable) => ipcRenderer.invoke("window:set-focusable", focusable),

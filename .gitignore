@@ -29,3 +29,6 @@ Thumbs.db
 
 # Agent / tooling
 .gg/
+
+# Local test harness (contains tokens at runtime)
+.scratch/

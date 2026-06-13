@@ -1611,9 +1611,13 @@ button {
 /* Dimension's "Floating Pill Bar" treatment — a translucent dark capsule with
    a subtle nebula glow + backdrop blur. Sits on top of the user's other apps
    without competing visually. */
+/* The call window reserves a transparent lane above the pill for transient
+   toasts; pin the pill itself to the bottom and let it size to its content so it
+   stays the same ~52px capsule rather than stretching to fill the lane. */
 .app-shell[data-call="active"] .call-stage {
   width: 100%;
-  height: 100%;
+  height: auto;
+  align-self: end;
   flex-direction: row;
   justify-content: center;
   gap: 7px;
@@ -1637,6 +1641,81 @@ button {
 
 .call-label {
   display: none;
+}
+
+/* ---------- Transient call toasts ---------- */
+/* Float just above the call pill; slide up and fade out on their own. The lane
+   is click-through so it never steals taps meant for apps behind it. */
+.call-toasts {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 58px;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  pointer-events: none;
+}
+
+.call-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(18, 18, 22, 0.96), rgba(6, 9, 26, 0.97));
+  box-shadow:
+    0 0 0 1px rgba(229, 229, 229, 0.08),
+    0 10px 26px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(16px) saturate(1.1);
+  color: var(--text);
+  font-family: Geist, "Inter", sans-serif;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Slide up in, hold, then fade out — then JS removes the node on animationend. */
+  animation: call-toast-life 3200ms var(--ease-out) forwards;
+}
+
+.call-toast-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+}
+
+@keyframes call-toast-life {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call-toast {
+    animation-duration: 2600ms;
+  }
 }
 
 /* meta (live dot + timer) — only during a live call */

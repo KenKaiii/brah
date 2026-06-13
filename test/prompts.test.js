@@ -89,21 +89,19 @@ test("buildRealtimeInstructions omits the daily logs section when there are none
   assert.doesNotMatch(instructions, /# Recent Daily Logs/);
 });
 
-test("agent instructions include daily log guidance", () => {
+test("memory is presented as automatic, with no agent-facing memory tools", () => {
   const instructions = buildAgentInstructions({});
-  assert.match(instructions, /# Daily Log/);
-  assert.match(instructions, /Use daily_log to journal/);
+  // The voice agent no longer manages memory: no curator section, no save tools.
+  assert.doesNotMatch(instructions, /# Memory — You Own It/);
+  assert.doesNotMatch(instructions, /# Daily Log/);
+  assert.doesNotMatch(instructions, /\bremember\b/);
+  assert.doesNotMatch(instructions, /\bdaily_log\b/);
+  // It is told memory is maintained for it in the background.
+  assert.match(instructions, /Your memory is automatic/);
+  assert.match(instructions, /do NOT have memory tools/i);
 });
 
-test("agent instructions tell the model to save memory proactively and silently", () => {
+test("confirmation guidance excludes routine local task/calendar actions", () => {
   const instructions = buildAgentInstructions({});
-  assert.match(instructions, /# Memory — You Own It/);
-  // Proactive, no-confirmation saving is the core behavior the user asked for.
-  assert.match(instructions, /Save with remember IMMEDIATELY and silently/);
-  assert.match(instructions, /Run local tools silently and proactively/);
-});
-
-test("confirmation guidance excludes routine local memory/task/calendar actions", () => {
-  const instructions = buildAgentInstructions({});
-  assert.match(instructions, /Routine local actions \(tasks, calendar, memory/);
+  assert.match(instructions, /Routine local actions \(tasks, calendar/);
 });

@@ -20,7 +20,9 @@ async function withProfileDb(callback) {
 test("missing agent profile falls back to defaults", async () => {
   await withProfileDb((filePath) => {
     const profile = loadAgentProfile(filePath);
-    assert.equal(profile.name, "Ken");
+    // Default profile has no hardcoded identity; the name is set by whoever
+    // installs the app (or extracted into memory later).
+    assert.equal(profile.name, "");
     assert.deepEqual(profile.goals, []);
   });
 });

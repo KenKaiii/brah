@@ -52,7 +52,7 @@ test("formatPermissionPrompt includes label, description, details, and risk", ()
 test("createPermissionDeniedResult returns a model-visible denial", () => {
   assert.deepEqual(createPermissionDeniedResult(getToolPermissionRequest("analyze_screen", {})), {
     status: "permission_denied",
-    message: "Ken did not approve Analyze screen. Ask before trying this tool again.",
+    message: "The user did not approve Analyze screen. Ask before trying this tool again.",
     tool: "analyze_screen",
   });
 });

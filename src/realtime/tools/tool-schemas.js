@@ -13,7 +13,7 @@ export const realtimeToolDefinitions = Object.freeze([
     type: "function",
     name: "add_task",
     description:
-      "Add one short item to the local Tasks list when Ken asks to remember, plan, or track a task.",
+      "Add one short item to the local Tasks list when the user asks to remember, plan, or track a task.",
     parameters: {
       type: "object",
       properties: {
@@ -50,7 +50,7 @@ export const realtimeToolDefinitions = Object.freeze([
     type: "function",
     name: "delete_task",
     description:
-      "Delete one local task. Pass the task id or a short exact-ish title query when Ken asks to remove a task.",
+      "Delete one local task. Pass the task id or a short exact-ish title query when the user asks to remove a task.",
     parameters: createLookupParameters(
       "Task id or title query, such as 'task-save-task-history' or 'Save task history'.",
     ),
@@ -84,7 +84,7 @@ export const realtimeToolDefinitions = Object.freeze([
     type: "function",
     name: "add_calendar_item",
     description:
-      "Add one short item to the local Calendar list when Ken asks to schedule, block, or remember an event.",
+      "Add one short item to the local Calendar list when the user asks to schedule, block, or remember an event.",
     parameters: {
       type: "object",
       properties: {
@@ -128,176 +128,10 @@ export const realtimeToolDefinitions = Object.freeze([
     type: "function",
     name: "delete_calendar_item",
     description:
-      "Delete one local calendar item. Pass the calendar item id or a short exact-ish title query when Ken asks to remove an event.",
+      "Delete one local calendar item. Pass the calendar item id or a short exact-ish title query when the user asks to remove an event.",
     parameters: createLookupParameters(
       "Calendar item id or title query, such as 'calendar-product-review' or 'Product review'.",
     ),
-  },
-  {
-    type: "function",
-    name: "remember",
-    description:
-      "Save a fact to long-term memory. Keep each fact atomic (under 30 words, one piece of info per call). Use specific keys like 'partner_name' not 'family'. Save proactively when Ken shares something meaningful. If Ken asks you NOT to remember something, do not save it. For private or emotionally heavy facts (health, relationships, finances), save with sensitive true so they are never proactively brought up.",
-    parameters: {
-      type: "object",
-      properties: {
-        category: {
-          type: "string",
-          description:
-            "Category: user_info, preferences, projects, people, work, notes, decisions.",
-          minLength: 1,
-          maxLength: 60,
-        },
-        subject: {
-          type: "string",
-          description:
-            "Specific, descriptive key, such as 'partner_name', 'coffee_preference', or 'current_project'.",
-          minLength: 1,
-          maxLength: 80,
-        },
-        content: {
-          type: "string",
-          description: "The fact to remember (max 25-30 words, one piece of info only).",
-          minLength: 1,
-          maxLength: 300,
-        },
-        sensitive: {
-          type: "boolean",
-          description:
-            "Mark true for private/emotionally heavy facts (health, relationships, finances). Sensitive facts are remembered but never proactively brought up unprompted.",
-        },
-      },
-      required: ["category", "subject", "content"],
-      additionalProperties: false,
-    },
-  },
-  {
-    type: "function",
-    name: "forget",
-    description:
-      "Remove a fact from long-term memory. Forget by category + subject, or by fact id from list_facts/recall_memory.",
-    parameters: {
-      type: "object",
-      properties: {
-        category: {
-          type: "string",
-          description: "Category of the fact to forget.",
-          minLength: 1,
-          maxLength: 60,
-        },
-        subject: {
-          type: "string",
-          description: "Subject of the fact to forget.",
-          minLength: 1,
-          maxLength: 80,
-        },
-        id: {
-          type: "integer",
-          description: "Fact id (alternative to category+subject).",
-          minimum: 1,
-        },
-      },
-      required: [],
-      additionalProperties: false,
-    },
-  },
-  {
-    type: "function",
-    name: "list_facts",
-    description:
-      "List all known facts from long-term memory. Use when Ken asks 'what do you know about me' or before updating/forgetting a fact.",
-    parameters: {
-      type: "object",
-      properties: {
-        category: {
-          type: "string",
-          description: "Optional: filter by category.",
-          minLength: 1,
-          maxLength: 60,
-        },
-      },
-      required: [],
-      additionalProperties: false,
-    },
-  },
-  {
-    type: "function",
-    name: "update_fact",
-    description:
-      "Correct or refine an existing fact by its id (get ids from list_facts or recall_memory). Use when Ken updates info that is already remembered, instead of creating a duplicate.",
-    parameters: {
-      type: "object",
-      properties: {
-        id: {
-          type: "integer",
-          description: "The fact id to update.",
-          minimum: 1,
-        },
-        category: {
-          type: "string",
-          description: "New category (optional).",
-          minLength: 1,
-          maxLength: 60,
-        },
-        subject: {
-          type: "string",
-          description: "New subject key (optional).",
-          minLength: 1,
-          maxLength: 80,
-        },
-        content: {
-          type: "string",
-          description: "New content (optional).",
-          minLength: 1,
-          maxLength: 300,
-        },
-        sensitive: {
-          type: "boolean",
-          description:
-            "Set true to mark the fact private/sensitive (never proactively brought up unprompted), false to unmark (optional).",
-        },
-      },
-      required: ["id"],
-      additionalProperties: false,
-    },
-  },
-  {
-    type: "function",
-    name: "recall_memory",
-    description:
-      "Search your own long-term memory for facts matching a query (keyword match on content, subject, and category). Use mid-conversation when you need to remember something specific Ken mentioned before.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "What to recall, in natural language keywords.",
-          minLength: 1,
-          maxLength: 240,
-        },
-      },
-      required: ["query"],
-      additionalProperties: false,
-    },
-  },
-  {
-    type: "function",
-    name: "daily_log",
-    description:
-      "Journal one concise line about what Ken worked on, talked about, decided, or how he seemed. Log at major topic changes or session endings, not every message. The auto-timestamped entry is kept for a few days and injected for continuity.",
-    parameters: {
-      type: "object",
-      properties: {
-        entry: {
-          type: "string",
-          description: "One concise line describing what happened (auto-timestamped).",
-          minLength: 1,
-          maxLength: 400,
-        },
-      },
-      required: ["entry"],
-      additionalProperties: false,
-    },
   },
   {
     type: "function",
@@ -353,7 +187,7 @@ export const realtimeToolDefinitions = Object.freeze([
     type: "function",
     name: "read_file",
     description:
-      "Read a UTF-8 text file from Ken's workspace. Use a path relative to the workspace root before editing or answering questions about file contents.",
+      "Read a UTF-8 text file from the user's workspace. Use a path relative to the workspace root before editing or answering questions about file contents.",
     parameters: {
       type: "object",
       properties: {
@@ -378,7 +212,7 @@ export const realtimeToolDefinitions = Object.freeze([
     type: "function",
     name: "write_file",
     description:
-      "Create or overwrite a UTF-8 text file in Ken's workspace with the full new contents. Parent folders are created automatically. Confirm before overwriting important files.",
+      "Create or overwrite a UTF-8 text file in the user's workspace with the full new contents. Parent folders are created automatically. Confirm before overwriting important files.",
     parameters: {
       type: "object",
       properties: {
@@ -473,7 +307,7 @@ export const realtimeToolDefinitions = Object.freeze([
     type: "function",
     name: "computer_use_task",
     description:
-      "Run a computer-use task. Use target 'browser' for an isolated automation browser harness, or target 'computer' to operate Ken's real desktop (live screen plus OS mouse and keyboard) when he asks you to control the actual machine. OS mode requires Screen Recording and Accessibility permissions.",
+      "Run a computer-use task. Use target 'browser' for an isolated automation browser harness, or target 'computer' to operate the user's real desktop (live screen plus OS mouse and keyboard) when they ask you to control the actual machine. OS mode requires Screen Recording and Accessibility permissions.",
     parameters: {
       type: "object",
       properties: {
@@ -508,20 +342,21 @@ export const realtimeToolDefinitions = Object.freeze([
     type: "function",
     name: "cancel_computer_use",
     description:
-      "Stop the currently running computer_use_task when Ken asks to stop/cancel computer use, or when the task should be aborted.",
+      "Stop the currently running computer_use_task when the user asks to stop/cancel computer use, or when the task should be aborted.",
     parameters: emptyObjectParameters,
   },
   {
     type: "function",
     name: "end_call",
     description:
-      "End the current voice call and hang up when Ken says goodbye, asks to end/stop the call, or the conversation is clearly finished. Say a short goodbye first, then call this.",
+      "End the current voice call and hang up when the user says goodbye, asks to end/stop the call, or the conversation is clearly finished. Say a short goodbye first, then call this.",
     parameters: {
       type: "object",
       properties: {
         reason: {
           type: "string",
-          description: "Optional short reason for ending the call, such as 'Ken said goodbye'.",
+          description:
+            "Optional short reason for ending the call, such as 'the user said goodbye'.",
           maxLength: 120,
         },
       },

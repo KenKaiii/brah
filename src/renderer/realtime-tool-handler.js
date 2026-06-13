@@ -75,7 +75,7 @@ export function createRealtimeToolHandler({
       try {
         result = await executeToolSafely(executeTool, toolCall.name, toolCall.arguments);
       } finally {
-        onToolEnd?.(toolCall.name);
+        onToolEnd?.(toolCall.name, result);
       }
       if (isRecord(result?.realtimeInput)) {
         sendRealtimeToolOutput(sendEvent, toolCall.callId, createRealtimeImageToolOutput(result), {
@@ -111,7 +111,7 @@ export function sendRealtimeImageResponse(sendEvent, result) {
       output_modalities: ["audio"],
       input: [result.realtimeInput],
       instructions:
-        "Analyze the attached screenshot now and answer Ken directly. Do not say you are waiting for a screen read; the image is attached to this response input.",
+        "Analyze the attached screenshot now and answer the user directly. Do not say you are waiting for a screen read; the image is attached to this response input.",
     },
   });
 }
@@ -121,7 +121,7 @@ export function createRealtimeImageToolOutput(result) {
   return {
     ...safeResult,
     message:
-      "Screenshot captured and attached to the Realtime conversation. Use the attached image to answer Ken's screen question.",
+      "Screenshot captured and attached to the Realtime conversation. Use the attached image to answer the user's screen question.",
   };
 }
 
@@ -150,16 +150,6 @@ export function formatToolStatus(name) {
     case "list_calendar_items":
     case "delete_calendar_item":
       return "Using calendar…";
-    case "remember":
-      return "Remembering…";
-    case "forget":
-      return "Forgetting…";
-    case "list_facts":
-    case "update_fact":
-    case "recall_memory":
-      return "Using memory…";
-    case "daily_log":
-      return "Journaling…";
     default:
       return "Using tool…";
   }

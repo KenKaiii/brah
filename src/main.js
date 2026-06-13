@@ -40,12 +40,12 @@ import {
 } from "./realtime/tools/daily-logs-store.js";
 import { setDatabaseUserDataPath } from "./realtime/tools/database.js";
 import { executeRealtimeTool, getRealtimeToolDefinitions } from "./realtime/tools/index.js";
+import { extractMemory } from "./realtime/tools/memory-extractor.js";
 import {
   decayFactImportance,
   deleteFact,
   getAllFacts,
   getFactsForContext,
-  getFactsMemoryUsage,
 } from "./realtime/tools/memory-store.js";
 import {
   loadMicrophoneDeviceId,
@@ -100,7 +100,9 @@ const windowModes = Object.freeze({
   // while the user works in other apps. The main UI (orb/panel) behaves like a
   // normal window and can be sent behind other windows.
   orb: { width: 172, height: 188, placement: "bottom-right", alwaysOnTop: false },
-  call: { width: 226, height: 52, placement: "bottom-center", alwaysOnTop: true },
+  // Height reserves a small transparent lane above the 52px pill for transient
+  // toasts (e.g. "Saved to memory"); the pill stays pinned to the window bottom.
+  call: { width: 226, height: 92, placement: "bottom-center", alwaysOnTop: true },
   panel: { width: 440, height: 600, placement: "bottom-right", alwaysOnTop: false },
 });
 
@@ -265,6 +267,11 @@ async function setMainWindowMode(mode, { animate = true } = {}) {
   // Only the transient call overlay floats above other apps; the main UI is a
   // normal window so it can be sent behind other windows.
   mainWindow.setAlwaysOnTop(Boolean(target.alwaysOnTop));
+  // Drop the native macOS window shadow in call mode: the window now reserves a
+  // transparent toast lane above the pill, and the native shadow traces the full
+  // (mostly transparent) window rect as an odd edge. The pill carries its own CSS
+  // box-shadow for depth, so only orb/panel need the native shadow.
+  mainWindow.setHasShadow(windowMode !== "call");
   applyWindowBounds(targetBounds);
   if (sizeChanged && animate) {
     await fadeMainWindowTo(1, 130);
@@ -458,9 +465,13 @@ ipcMain.handle("memory:list-facts", () => getAllFacts());
 ipcMain.handle("memory:delete-facts", (_event, ids) => deleteMemoryFacts(ids));
 ipcMain.handle("memory:list-daily-logs", () => getAllDailyLogs());
 ipcMain.handle("memory:delete-daily-logs", (_event, ids) => deleteDailyLogs(ids));
+// Background memory extraction: the renderer hands over the recent transcript
+// after a turn; a cheap text model pulls durable facts + log entries and writes
+// them to SQLite. Replaces the realtime agent calling save tools itself.
+ipcMain.handle("memory:extract", (_event, transcript) => runMemoryExtraction(transcript));
 // Fresh realtime instructions with the current memory baked in. The renderer
-// uses this to push a mid-call session.update after the agent mutates memory,
-// so facts/logs saved during a call become actively known for the rest of it
+// uses this to push a mid-call session.update after extraction writes new
+// facts/logs, so they become actively known for the rest of the call
 // (mirrors pocket-agent rebuilding the system prompt each turn).
 ipcMain.handle("realtime:get-instructions", () =>
   buildRealtimeInstructions({
@@ -679,12 +690,6 @@ function categoryForTool(name) {
     case "take_screenshot":
     case "analyze_screen":
       return "screenshots";
-    case "remember":
-    case "forget":
-    case "update_fact":
-      return "memory";
-    case "daily_log":
-      return "daily";
     case "web_search":
     case "web_fetch":
       return "web";
@@ -788,18 +793,10 @@ function deleteMemoryFacts(ids) {
 
 function loadMemoryContext() {
   try {
-    const facts = getFactsForContext();
-    if (!facts) {
-      return "";
-    }
-    // Mirror pocket-agent's curator model: when the store nears its char budget,
-    // tell the agent to tidy memory itself (merge/forget) rather than relying on
-    // an automated consolidation pass.
-    const usage = getFactsMemoryUsage();
-    if (usage.pct >= 80) {
-      return `${facts}\n\n_Memory is ${usage.pct}% full (${usage.usedChars}/${usage.budgetChars} chars). Consolidate overlapping facts and forget stale ones to stay under budget._`;
-    }
-    return facts;
+    // Just the facts: the voice agent has no memory tools, so injecting any
+    // "consolidate/forget" pressure note would tell it to do something it can't.
+    // Store-size curation is the extractor's concern (it updates by subject).
+    return getFactsForContext();
   } catch (error) {
     safeConsole("warn", "Failed to load memory facts for context", error);
     return "";
@@ -824,6 +821,30 @@ function deleteDailyLogs(ids) {
     }
   }
   return { status: "ok", deleted };
+}
+
+async function runMemoryExtraction(transcript) {
+  const apiKey = await loadOpenAIApiKey();
+  if (!apiKey) {
+    // The extractor needs the API-key path; gpt-5.4-mini can't go through the
+    // OAuth/Codex realtime backend. No key -> nothing is extracted.
+    return { status: "skipped", reason: "no_api_key" };
+  }
+  const result = await extractMemory({
+    transcript,
+    apiKey,
+    userName: loadAgentProfile().name,
+    logger: (event, details) => void writeDiagnosticLog(event, sanitizeDiagnosticValue(details)),
+  });
+  if (result.status === "extracted") {
+    if (result.savedFacts > 0 || result.forgotFacts > 0) {
+      broadcastDataChanged("memory");
+    }
+    if (result.savedLogs > 0) {
+      broadcastDataChanged("daily");
+    }
+  }
+  return result;
 }
 
 async function deleteScreenshots(names) {

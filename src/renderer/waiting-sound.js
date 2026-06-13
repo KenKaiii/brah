@@ -8,9 +8,12 @@ const START_DELAY_MS = 250;
 
 /**
  * Looping "thinking" ambience that fills the silence while the agent is busy
- * running tool calls (not while it is speaking). Uses the Web Audio API with a
- * GainNode so it can fade in and out smoothly, and reference-counts overlapping
- * tools so the sound spans an entire busy stretch rather than restarting.
+ * between turns — from when a tool starts until the agent resumes speaking. Its
+ * lifetime is intentionally NOT tied to tool execution duration: local tools
+ * (memory, tasks) finish in ~20ms but the model still needs ~1s to formulate
+ * and speak its reply, and that whole gap is the silence we fill. Uses the Web
+ * Audio API with a GainNode for smooth fades; `start()` is debounced so genuinely
+ * instant turnarounds never blip the sound on and off.
  */
 export function createWaitingSound() {
   let audioContext = null;
@@ -18,7 +21,7 @@ export function createWaitingSound() {
   let decodePromise = null;
   let source = null;
   let gainNode = null;
-  let activeCount = 0;
+  let wantPlaying = false;
   let startTimer = null;
 
   function getContext() {
@@ -59,7 +62,7 @@ export function createWaitingSound() {
       const decoded = await ensureBuffer(context);
       // The busy stretch may have ended (or playback already started) while we
       // were awaiting context resume/decode.
-      if (activeCount === 0 || source) {
+      if (!wantPlaying || source) {
         return;
       }
       gainNode = context.createGain();
@@ -108,10 +111,14 @@ export function createWaitingSound() {
   }
 
   return {
-    // Mark a tool as running. Starts (or keeps) the waiting sound.
+    // The agent has gone quiet to work (a tool started). Begin the waiting
+    // ambience after a short debounce; idempotent while already requested.
     start() {
-      activeCount += 1;
-      if (activeCount > 1 || startTimer || source) {
+      if (wantPlaying) {
+        return;
+      }
+      wantPlaying = true;
+      if (source || startTimer) {
         return;
       }
       startTimer = setTimeout(() => {
@@ -120,14 +127,13 @@ export function createWaitingSound() {
       }, START_DELAY_MS);
     },
 
-    // Mark a tool as finished. Fades the sound out once nothing is running.
+    // The wait is over (agent resumed speaking, user barged in, or the turn
+    // ended). Fade out, or cancel a pending start if it never began.
     stop() {
-      if (activeCount > 0) {
-        activeCount -= 1;
-      }
-      if (activeCount > 0) {
+      if (!wantPlaying) {
         return;
       }
+      wantPlaying = false;
       if (startTimer) {
         clearTimeout(startTimer);
         startTimer = null;
@@ -138,7 +144,7 @@ export function createWaitingSound() {
 
     // Hard reset (e.g. the call ended); cancels pending start and fades out.
     reset() {
-      activeCount = 0;
+      wantPlaying = false;
       if (startTimer) {
         clearTimeout(startTimer);
         startTimer = null;

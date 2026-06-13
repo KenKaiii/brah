@@ -69,7 +69,6 @@ async function withToolHarness(callback) {
   try {
     await callback({
       planner: { storePath: path.join(directory, "planner", "items.json") },
-      memory: { storePath: path.join(directory, "memory", "facts.db") },
       screenshot: {
         ...createScreenshotHarness(directory),
       },
@@ -229,46 +228,6 @@ test("every registered Realtime tool executes a functional path", async () => {
     result = await executeRealtimeTool("delete_calendar_item", { query: "Tool review" }, options);
     observedNames.push("delete_calendar_item");
     assert.equal(result.status, "deleted");
-
-    result = await executeRealtimeTool(
-      "remember",
-      { category: "preferences", subject: "coffee_preference", content: "Drinks oat flat whites" },
-      options,
-    );
-    observedNames.push("remember");
-    assert.equal(result.status, "saved");
-    const rememberedFactId = result.id;
-
-    result = await executeRealtimeTool("list_facts", {}, options);
-    observedNames.push("list_facts");
-    assert.equal(result.status, "listed");
-    assert.equal(result.count, 1);
-    assert.equal(result.facts[0].subject, "coffee_preference");
-
-    result = await executeRealtimeTool("recall_memory", { query: "coffee" }, options);
-    observedNames.push("recall_memory");
-    assert.equal(result.status, "recalled");
-    assert.equal(result.count, 1);
-
-    result = await executeRealtimeTool(
-      "update_fact",
-      { id: rememberedFactId, content: "Switched to espresso" },
-      options,
-    );
-    observedNames.push("update_fact");
-    assert.equal(result.status, "updated");
-
-    result = await executeRealtimeTool("forget", { id: rememberedFactId }, options);
-    observedNames.push("forget");
-    assert.equal(result.status, "deleted");
-
-    result = await executeRealtimeTool(
-      "daily_log",
-      { entry: "Shipped the daily logs feature and reviewed the memory tab" },
-      options,
-    );
-    observedNames.push("daily_log");
-    assert.equal(result.status, "logged");
 
     result = await executeRealtimeTool(
       "web_search",

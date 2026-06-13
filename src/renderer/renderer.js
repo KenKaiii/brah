@@ -60,6 +60,7 @@ const callWaveCanvas = document.querySelector("#call-wave");
 const remoteAudioElement = document.querySelector("#remote-audio");
 const toolActivityElement = document.querySelector("#tool-activity");
 const toolActivityLabelElement = document.querySelector("#tool-activity-label");
+const callToastsElement = document.querySelector("#call-toasts");
 
 const stoppableTools = new Set(["computer_use_task"]);
 const toolActivityLabels = {
@@ -123,20 +124,150 @@ function handleToolStart(name) {
   }
 }
 
-function handleToolEnd(name) {
+function handleToolEnd(name, result) {
   hideToolActivity(name);
-  if (!stoppableTools.has(name)) {
-    waitingSound.stop();
-  }
-  if (memoryMutatingTools.has(name)) {
-    void refreshSessionMemory();
+  // The waiting sound is intentionally NOT stopped here: tool execution finishes
+  // long before the agent speaks again (local tools run in ~20ms), so the sound
+  // keeps filling the silence until an audio/turn-end event stops it.
+  const toast = formatToolToast(name, result);
+  if (toast) {
+    showCallToast(toast);
   }
 }
 
-// Tools that change stored facts. After one runs mid-call we re-inject the
-// refreshed "Long-Term Memory" block via session.update so the just-saved or
-// updated facts stay authoritative for the rest of the call.
-const memoryMutatingTools = new Set(["remember", "update_fact", "forget", "daily_log"]);
+// Map a finished tool + its result to a short toast, or null to stay silent.
+// Read-only tools (lists, reads), computer use (own card), and end_call are
+// intentionally omitted so the lane only flashes for meaningful actions.
+function formatToolToast(name, result) {
+  const status = result?.status;
+  switch (name) {
+    case "add_task":
+      return status === "created" ? "Task added" : null;
+    case "delete_task":
+      return status === "deleted" ? "Task deleted" : null;
+    case "update_task_status":
+      return status === "updated" ? "Task updated" : null;
+    case "add_calendar_item":
+      return status === "created" ? "Event added" : null;
+    case "delete_calendar_item":
+      return status === "deleted" ? "Event deleted" : null;
+    case "web_search":
+      return status === "searched" ? "Searched the web" : null;
+    case "web_fetch":
+      return typeof status === "number" && status < 400 ? "Read a page" : null;
+    case "take_screenshot":
+      return status === "captured" ? "Screenshot taken" : null;
+    case "write_file":
+      return status === "created" ? "Wrote a file" : null;
+    case "edit_file":
+      return status === "edited" ? "Edited a file" : null;
+    default:
+      return null;
+  }
+}
+
+// ---------- Background memory extraction ----------
+// Memory is no longer the voice agent's job. We buffer the call transcript and,
+// after each completed user turn, hand the recent window to a cheap text model
+// in the main process that writes durable facts + daily logs to SQLite. Once it
+// persists anything, we re-inject the refreshed memory via session.update so the
+// agent "knows" it for the rest of the call.
+const MAX_TRANSCRIPT_TURNS = 16;
+const EXTRACTION_DEBOUNCE_MS = 1500;
+const transcriptBuffer = [];
+let extractionTimer = null;
+
+function recordTranscriptTurn(role, text) {
+  if (typeof text !== "string" || !text.trim()) {
+    return;
+  }
+  transcriptBuffer.push({ role, text: text.trim() });
+  if (transcriptBuffer.length > MAX_TRANSCRIPT_TURNS) {
+    transcriptBuffer.splice(0, transcriptBuffer.length - MAX_TRANSCRIPT_TURNS);
+  }
+}
+
+function scheduleMemoryExtraction() {
+  if (extractionTimer) {
+    clearTimeout(extractionTimer);
+  }
+  extractionTimer = setTimeout(() => {
+    extractionTimer = null;
+    void runMemoryExtraction();
+  }, EXTRACTION_DEBOUNCE_MS);
+}
+
+async function runMemoryExtraction() {
+  if (transcriptBuffer.length === 0) {
+    return;
+  }
+  try {
+    const result = await window.brah.extractMemory(transcriptBuffer.slice());
+    if (
+      result?.status === "extracted" &&
+      (result.savedFacts > 0 || result.forgotFacts > 0 || result.savedLogs > 0)
+    ) {
+      const toast = formatMemoryToast(result.savedFacts, result.forgotFacts, result.savedLogs);
+      if (toast) {
+        showCallToast(toast);
+      }
+      await refreshSessionMemory();
+    }
+  } catch (error) {
+    void writeRendererDiagnostic("memory.extract.invoke_failed", formatRendererError(error));
+  }
+}
+
+function formatMemoryToast(savedFacts, forgotFacts, savedLogs) {
+  if (savedFacts > 0) {
+    const base = savedFacts === 1 ? "New memory saved" : `${savedFacts} memories saved`;
+    return savedLogs > 0 ? `${base} · journaled` : base;
+  }
+  if (savedLogs > 0) {
+    return "Daily log updated";
+  }
+  if (forgotFacts > 0) {
+    return "Memory tidied up";
+  }
+  return null;
+}
+
+// Transient feedback that slides up above the call pill and fades out on its own.
+// Only meaningful during a call (that's when the lane is visible); the node
+// removes itself on animationend so nothing accumulates.
+function showCallToast(text) {
+  // The toast lane only exists in call mode; skip when not on a call so a late
+  // async result (e.g. end-of-call extraction) can't linger into panel mode.
+  if (!callToastsElement || !text || !isCallActive) {
+    return;
+  }
+  const toast = document.createElement("div");
+  toast.className = "call-toast";
+  const dot = document.createElement("span");
+  dot.className = "call-toast-dot";
+  const label = document.createElement("span");
+  label.className = "call-toast-label";
+  label.textContent = text;
+  toast.append(dot, label);
+  toast.addEventListener("animationend", () => toast.remove());
+  callToastsElement.append(toast);
+  // Safety net in case animationend never fires (e.g. tab hidden mid-animation).
+  window.setTimeout(() => toast.remove(), 5000);
+}
+
+function clearCallToasts() {
+  if (callToastsElement) {
+    callToastsElement.replaceChildren();
+  }
+}
+
+function resetTranscriptBuffer() {
+  transcriptBuffer.length = 0;
+  if (extractionTimer) {
+    clearTimeout(extractionTimer);
+    extractionTimer = null;
+  }
+}
 
 async function refreshSessionMemory() {
   if (!isCallActive || dataChannel?.readyState !== "open") {
@@ -821,6 +952,7 @@ async function startCall() {
 
   callToggleButton.disabled = true;
   headerCallButton.disabled = true;
+  resetTranscriptBuffer();
   // Close the panel inside the layout swap's hidden phase (not before it), so the
   // large idle orb never flashes at panel size between the panel hiding and the
   // call pill appearing. The panel fades out, then the call pill fades in.
@@ -968,6 +1100,11 @@ async function stopCall() {
     clearTimeout(welcomeMicGuardTimer);
     welcomeMicGuardTimer = null;
   }
+  // Persist the final turn before teardown (the extractor writes to disk
+  // regardless of call state), then clear the buffer for the next call.
+  void runMemoryExtraction();
+  resetTranscriptBuffer();
+  clearCallToasts();
   playbackTracker.reset();
   responseCoordinator.reset();
   waitingSound.reset();
@@ -1012,20 +1149,46 @@ async function handleRealtimeEvent(event) {
   if (await realtimeToolHandler.handleEvent(event)) {
     return;
   }
+  if (event.type === "conversation.item.input_audio_transcription.completed") {
+    // The user's transcribed turn just finalized — buffer it and schedule extraction.
+    recordTranscriptTurn("user", event.transcript);
+    scheduleMemoryExtraction();
+    return;
+  }
+  if (event.type === "response.output_audio_transcript.done") {
+    // The assistant's spoken turn finalized — buffer it for transcript context.
+    recordTranscriptTurn("assistant", event.transcript);
+    return;
+  }
   if (event.type === "input_audio_buffer.speech_started") {
-    // Ken started talking: cut off any assistant audio immediately rather than
+    // The user started talking: cut off any assistant audio immediately rather than
     // waiting for the server VAD round-trip, then return to listening.
     interruptAssistantPlayback();
+    waitingSound.stop();
     setStatus("Listening");
     setMode("listening");
     return;
   }
-  if (event.type === "response.output_audio.delta") {
+  if (
+    event.type === "output_audio_buffer.started" ||
+    event.type === "response.output_audio.delta"
+  ) {
+    // The agent resumed speaking — the post-tool wait is over. Brah is WebRTC, so
+    // assistant audio rides the media track and response.output_audio.delta never
+    // fires; output_audio_buffer.started is the real "now speaking" signal (the
+    // delta is kept too for any WebSocket fallback). This is what actually stops
+    // the waiting ambience after a tool call.
+    waitingSound.stop();
     setStatus("Speaking");
     setMode("speaking");
     return;
   }
   if (event.type === "response.done") {
+    // Deliberately do NOT stop the waiting sound here: a tool call's own response
+    // completes (response.done) right after the tool runs but BEFORE the agent's
+    // spoken reply is generated, so stopping here would cut the sound off mid-wait.
+    // The sound is stopped when audio actually resumes (output_audio.delta) or the
+    // user barges in (speech_started); call end calls reset().
     if (pendingHangup) {
       void stopCall();
       return;
