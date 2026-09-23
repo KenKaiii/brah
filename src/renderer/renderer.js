@@ -1,6 +1,7 @@
 import {
   AGENT_PERSONAS,
   buildWelcomeInstructions,
+  formatVoiceLabel,
   normalizeAgentProfile,
   REALTIME_MODELS,
   REALTIME_VOICES,
@@ -121,6 +122,8 @@ let audioLevelMonitor = null;
 let pendingHangup = false;
 let hangupFallbackTimer = null;
 let hangupCompletion = null;
+let audioOutputBlocked = false;
+let activeToolCount = 0;
 const playbackTracker = createRealtimePlaybackTracker();
 const responseCoordinator = createRealtimeResponseCoordinator();
 const waitingSound = createWaitingSound();
@@ -137,7 +140,7 @@ const realtimeToolHandler = createRealtimeToolHandler({
   executeTool: (name, args) => window.brah.executeRealtimeTool(name, args),
   sendEvent: sendRealtimeDataChannelEvent,
   setMode,
-  setStatus,
+  setStatus: setCallStatus,
   onEndCall: requestHangup,
   onToolStart: handleToolStart,
   onToolEnd: handleToolEnd,
@@ -146,6 +149,7 @@ const realtimeToolHandler = createRealtimeToolHandler({
 // While the agent is busy in a tool call it produces no audio, so fill the
 // silence with the looping waiting ambience (fading in/out via waiting-sound).
 function handleToolStart(name) {
+  activeToolCount++;
   showToolActivity(name);
   // Computer use has its own on-screen indicator (and can run for a long time),
   // so only fill silence with the waiting ambience for normal quick tool calls.
@@ -155,6 +159,7 @@ function handleToolStart(name) {
 }
 
 function handleToolEnd(name, result) {
+  activeToolCount = Math.max(0, activeToolCount - 1);
   hideToolActivity(name);
   // The waiting sound is intentionally NOT stopped here: tool execution finishes
   // long before the agent speaks again (local tools run in ~20ms), so the sound
@@ -439,6 +444,7 @@ function requestHangup() {
     return;
   }
   pendingHangup = true;
+  responseCoordinator.beginHangup();
   setStatus("Ending call…");
   hangupCompletion = createHangupCompletion(
     () => playbackTracker.state,
@@ -455,6 +461,10 @@ function requestHangup() {
 
 function setStatus(message) {
   statusElement.textContent = message;
+}
+
+function setCallStatus(message) {
+  setStatus(pendingHangup ? "Ending call…" : audioOutputBlocked ? "Audio output blocked" : message);
 }
 
 function setMode(mode) {
@@ -705,6 +715,26 @@ async function handleModelSelection() {
   }
 }
 
+// Voice and persona are dropdowns, so they save the moment they change — like
+// the Settings models — instead of silently reverting when the user doesn't
+// press Save. Only that one field is written; unsaved text edits are untouched.
+async function handleAgentChoiceSelection(field, select) {
+  const previous = agentProfile[field];
+  try {
+    agentProfile = normalizeAgentProfile(
+      await window.brah.setAgentProfile({ ...agentProfile, [field]: select.value }),
+    );
+    select.value = agentProfile[field];
+    setAgentStatus("saved", "Saved");
+    // Voice and persona are baked into the minted secret; re-prime it.
+    invalidatePrefetchedSecret();
+    prefetchRealtimeSecret();
+  } catch (error) {
+    select.value = previous;
+    setAgentStatus("error", `Save failed: ${error.message}`);
+  }
+}
+
 // The task model is read by main on each computer-use/memory run, so nothing
 // needs re-priming here.
 async function handleTaskModelSelection() {
@@ -737,7 +767,7 @@ function populateAgentOptions() {
     ...REALTIME_VOICES.map((voice) => {
       const option = document.createElement("option");
       option.value = voice;
-      option.textContent = voice.charAt(0).toUpperCase() + voice.slice(1);
+      option.textContent = formatVoiceLabel(voice);
       return option;
     }),
   );
@@ -788,17 +818,28 @@ async function saveAgentProfile() {
     model: agentProfile.model,
     taskModel: agentProfile.taskModel,
   };
-  agentStatusElement.textContent = "Saving\u2026";
+  setAgentStatus("saving", "Saving\u2026");
   try {
     agentProfile = normalizeAgentProfile(await window.brah.setAgentProfile(profile));
     renderAgentProfile();
-    agentStatusElement.textContent = "Saved";
+    setAgentStatus("saved", "Saved");
     // Voice/instructions are baked into the minted secret, so drop the stale
     // prefetch and prime a fresh one reflecting the updated profile.
     invalidatePrefetchedSecret();
     prefetchRealtimeSecret();
   } catch (error) {
-    agentStatusElement.textContent = `Save failed: ${error.message}`;
+    setAgentStatus("error", `Save failed: ${error.message}`);
+  }
+}
+
+// "saved" flashes green then fades to grey (CSS). Clearing data-state and
+// forcing a reflow restarts the animation when saving twice in a row.
+function setAgentStatus(state, message) {
+  agentStatusElement.textContent = message;
+  delete agentStatusElement.dataset.state;
+  if (state) {
+    void agentStatusElement.offsetWidth;
+    agentStatusElement.dataset.state = state;
   }
 }
 
@@ -1091,7 +1132,7 @@ async function startCall() {
     void populateMicDevices();
 
     const pc = new RTCPeerConnection();
-    let audioOutputBlocked = false;
+    audioOutputBlocked = false;
     peerConnection = pc;
     const channel = pc.createDataChannel("oai-events");
     dataChannel = channel;
@@ -1107,13 +1148,15 @@ async function startCall() {
           () => {
             if (generation !== callGeneration || !audioOutputBlocked) return;
             audioOutputBlocked = false;
-            if (pc.connectionState === "connected") setStatus("Listening");
+            if (pc.connectionState === "connected") {
+              setCallStatus(playbackTracker.state.isAudioPlaying ? "Speaking" : "Listening");
+            }
           },
           (error) => {
             if (generation !== callGeneration) return;
             audioOutputBlocked = true;
             void writeRendererDiagnostic("call.audio.play_failed", formatRendererError(error));
-            setStatus("Audio output blocked");
+            setCallStatus("Audio output blocked");
           },
         );
       };
@@ -1136,9 +1179,7 @@ async function startCall() {
       void writeRendererDiagnostic("call.connection_state", {
         state: pc.connectionState,
       });
-      setStatus(
-        audioOutputBlocked ? "Audio output blocked" : formatConnectionState(pc.connectionState),
-      );
+      setCallStatus(formatConnectionState(pc.connectionState));
       if (pc.connectionState === "connected") {
         setMode("listening");
       }
@@ -1146,7 +1187,7 @@ async function startCall() {
     channel.addEventListener("open", () => {
       if (generation !== callGeneration) return;
       void writeRendererDiagnostic("call.data_channel.open", {});
-      setStatus("Listening");
+      setCallStatus("Listening");
       setMode("listening");
       sendRealtimeWelcome();
     });
@@ -1167,6 +1208,10 @@ async function startCall() {
       void handleRealtimeEvent(realtimeEvent, generation);
     });
 
+    // Send no mic audio until the greeting finishes: anything captured while
+    // connecting reaches the server VAD as a phantom user turn that cancels
+    // the greeting and triggers a second one.
+    beginWelcomeMicGuard();
     for (const track of localStream.getTracks()) {
       pc.addTrack(track, localStream);
     }
@@ -1206,7 +1251,7 @@ async function startCall() {
       pc.connectionState !== "connected" &&
       !audioOutputBlocked
     ) {
-      setStatus("Connecting");
+      setCallStatus("Connecting");
     }
   } catch (error) {
     if (generation === callGeneration) {
@@ -1259,6 +1304,8 @@ async function stopCall() {
     hangupCompletion?.stop();
     hangupCompletion = null;
     pendingHangup = false;
+    audioOutputBlocked = false;
+    activeToolCount = 0;
     if (welcomeMicGuardTimer !== null) {
       clearTimeout(welcomeMicGuardTimer);
       welcomeMicGuardTimer = null;
@@ -1314,7 +1361,11 @@ async function handleRealtimeEvent(event, generation) {
   hangupCompletion?.observe(event.type);
   if (generation !== callGeneration) return;
   // The welcome greeting finished playing through the speakers — safe to listen.
-  if (event.type === "output_audio_buffer.stopped" && welcomeMicGuardTimer !== null) {
+  if (
+    (event.type === "output_audio_buffer.stopped" ||
+      event.type === "output_audio_buffer.cleared") &&
+    welcomeMicGuardTimer !== null
+  ) {
     endWelcomeMicGuard();
   }
   if (
@@ -1325,9 +1376,10 @@ async function handleRealtimeEvent(event, generation) {
     if (
       event.type === "output_audio_buffer.stopped" &&
       !playbackTracker.state.hasActiveResponse &&
+      activeToolCount === 0 &&
       appShellElement.dataset.toolActivity !== "active"
     ) {
-      setStatus("Listening");
+      setCallStatus("Listening");
       setMode("listening");
     }
   }
@@ -1358,7 +1410,7 @@ async function handleRealtimeEvent(event, generation) {
     // waiting for the server VAD round-trip, then return to listening.
     interruptAssistantPlayback();
     waitingSound.stop();
-    setStatus("Listening");
+    setCallStatus("Listening");
     setMode("listening");
     return;
   }
@@ -1372,7 +1424,7 @@ async function handleRealtimeEvent(event, generation) {
     // delta is kept too for any WebSocket fallback). This is what actually stops
     // the waiting ambience after a tool call.
     waitingSound.stop();
-    setStatus("Speaking");
+    setCallStatus("Speaking");
     setMode("speaking");
     return;
   }
@@ -1382,9 +1434,9 @@ async function handleRealtimeEvent(event, generation) {
     // spoken reply is generated, so stopping here would cut the sound off mid-wait.
     // The sound is stopped when audio actually resumes (output_audio.delta) or the
     // user barges in (speech_started); call end calls reset().
-    if (pendingHangup) return;
+    if (pendingHangup || activeToolCount > 0) return;
     if (playbackTracker.state.isAudioPlaying) return;
-    setStatus("Listening");
+    setCallStatus("Listening");
     setMode("listening");
     return;
   }
@@ -1572,6 +1624,8 @@ async function switchMicrophone() {
       for (const track of newStream.getTracks()) track.stop();
       return;
     }
+    // Keep the greeting mute in force if the mic is switched mid-greeting.
+    newTrack.enabled = welcomeMicGuardTimer === null;
     try {
       await sender.replaceTrack(newTrack);
     } catch (error) {
@@ -1624,6 +1678,8 @@ function endWelcomeMicGuard() {
   }
   clearTimeout(welcomeMicGuardTimer);
   welcomeMicGuardTimer = null;
+  // Drop any greeting echo already buffered server-side before listening.
+  sendRealtimeDataChannelEvent({ type: "input_audio_buffer.clear" });
   setMicrophoneMuted(false);
 }
 
@@ -1930,6 +1986,12 @@ settingsModelSelect.addEventListener("change", () => {
 settingsTaskModelSelect.addEventListener("change", () => {
   void handleTaskModelSelection();
 });
+agentVoiceSelect.addEventListener("change", () => {
+  void handleAgentChoiceSelection("voice", agentVoiceSelect);
+});
+agentPersonaSelect.addEventListener("change", () => {
+  void handleAgentChoiceSelection("persona", agentPersonaSelect);
+});
 permissionsToggleButton.addEventListener("click", () => {
   setMenuOpen(false);
   permissionsPanelElement.hidden = !permissionsPanelElement.hidden;
@@ -1941,7 +2003,7 @@ agentToggleButton.addEventListener("click", () => {
   setMenuOpen(false);
   agentPanelElement.hidden = !agentPanelElement.hidden;
   if (!agentPanelElement.hidden) {
-    agentStatusElement.textContent = "";
+    setAgentStatus(null, "");
     void loadAgentProfile();
   }
 });

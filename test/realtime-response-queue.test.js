@@ -37,6 +37,24 @@ test("response.done flushes the queued create and reactivates", () => {
   assert.deepEqual(coordinator.state, { activeResponse: true, hasPending: false });
 });
 
+test("multiple pending creates retain their order and image input", () => {
+  const coordinator = createRealtimeResponseCoordinator();
+  coordinator.requestCreate(createEvent("first"));
+  const image = { type: "response.create", response: { input: [{ image_url: "image" }] } };
+  const tool = createEvent("tool-output");
+  assert.equal(coordinator.requestCreate(image), null);
+  assert.equal(coordinator.requestCreate(tool), null);
+
+  const first = coordinator.observe({ type: "response.done" });
+  assert.equal(first, image);
+  assert.equal(coordinator.requestCreate(first), image);
+  assert.equal(coordinator.state.hasPending, true);
+  const second = coordinator.observe({ type: "response.done" });
+  assert.equal(second, tool);
+  assert.equal(coordinator.requestCreate(second), tool);
+  assert.deepEqual(coordinator.state, { activeResponse: true, hasPending: false });
+});
+
 test("response.done with nothing queued returns null", () => {
   const coordinator = createRealtimeResponseCoordinator();
   coordinator.requestCreate(createEvent("first"));
@@ -59,6 +77,36 @@ test("an active-response conflict re-queues the last sent create", () => {
   coordinator.noteActiveResponseConflict();
   assert.deepEqual(coordinator.state, { activeResponse: true, hasPending: true });
   assert.equal(coordinator.observe({ type: "response.done" }), sent);
+});
+
+test("a rejected create retries before later queued work", () => {
+  const coordinator = createRealtimeResponseCoordinator();
+  const rejected = { type: "response.create", response: { input: [{ image_url: "image" }] } };
+  const later = createEvent("tool-output");
+  assert.equal(coordinator.requestCreate(rejected), rejected);
+  assert.equal(coordinator.requestCreate(later), null);
+  coordinator.noteActiveResponseConflict();
+
+  assert.equal(coordinator.observe({ type: "response.done" }), rejected);
+  assert.equal(coordinator.requestCreate(rejected), rejected);
+  assert.equal(coordinator.observe({ type: "response.done" }), later);
+  assert.equal(coordinator.requestCreate(later), later);
+  assert.deepEqual(coordinator.state, { activeResponse: true, hasPending: false });
+});
+
+test("hang-up drops queued and late creates until the next call", () => {
+  const coordinator = createRealtimeResponseCoordinator();
+  coordinator.requestCreate(createEvent("first"));
+  coordinator.requestCreate(createEvent("tool-output"));
+  coordinator.requestCreate(createEvent("image"));
+  coordinator.beginHangup();
+  assert.deepEqual(coordinator.state, { activeResponse: true, hasPending: false });
+  assert.equal(coordinator.requestCreate(createEvent("late-tool-output")), null);
+  assert.equal(coordinator.observe({ type: "response.done" }), null);
+  assert.deepEqual(coordinator.state, { activeResponse: false, hasPending: false });
+  assert.equal(coordinator.requestCreate(createEvent("later")), null);
+  coordinator.reset();
+  assert.deepEqual(coordinator.requestCreate(createEvent("next-call")), createEvent("next-call"));
 });
 
 test("reset clears active and pending state", () => {

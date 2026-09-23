@@ -36,18 +36,29 @@ You are LAD, the user's fast, conversational voice companion inside a dark, mini
 - Only respond to clear speech.
 - If input is unclear, ask a quick clarification.`;
 
-export const REALTIME_VOICES = Object.freeze([
-  "marin",
-  "cedar",
-  "alloy",
-  "ash",
-  "ballad",
-  "coral",
-  "echo",
-  "sage",
-  "shimmer",
-  "verse",
-]);
+// Every voice the Realtime API offers (OpenAI docs, checked 2026-09-23), best
+// first. OpenAI recommends marin and cedar "for best quality"; the rest are the
+// older standard voices. OpenAI doesn't publish genders, so these are how each
+// voice commonly sounds.
+export const REALTIME_VOICE_DETAILS = Object.freeze({
+  marin: { label: "Marin", sound: "Female", tier: "Best" },
+  cedar: { label: "Cedar", sound: "Male", tier: "Best" },
+  alloy: { label: "Alloy", sound: "Neutral", tier: "Standard" },
+  ash: { label: "Ash", sound: "Male", tier: "Standard" },
+  ballad: { label: "Ballad", sound: "Male", tier: "Standard" },
+  coral: { label: "Coral", sound: "Female", tier: "Standard" },
+  echo: { label: "Echo", sound: "Male", tier: "Standard" },
+  sage: { label: "Sage", sound: "Female", tier: "Standard" },
+  shimmer: { label: "Shimmer", sound: "Female", tier: "Standard" },
+  verse: { label: "Verse", sound: "Male", tier: "Standard" },
+});
+
+export const REALTIME_VOICES = Object.freeze(Object.keys(REALTIME_VOICE_DETAILS));
+
+export function formatVoiceLabel(voice) {
+  const details = REALTIME_VOICE_DETAILS[voice];
+  return details ? `${details.label} (${details.sound} · ${details.tier})` : voice;
+}
 
 export const DEFAULT_VOICE = "marin";
 
@@ -138,7 +149,7 @@ export function buildAgentInstructions(profile = DEFAULT_AGENT_PROFILE) {
 }
 
 export function buildPersonaInstructions(persona) {
-  const key = typeof persona === "string" && persona in AGENT_PERSONAS ? persona : DEFAULT_PERSONA;
+  const key = normalizePersona(persona);
   const prompt = AGENT_PERSONAS[key].prompt;
   return prompt ? `# Persona\n${prompt}` : "";
 }
@@ -242,7 +253,9 @@ function normalizeVoice(voice) {
 }
 
 function normalizePersona(persona) {
-  return typeof persona === "string" && persona in AGENT_PERSONAS ? persona : DEFAULT_PERSONA;
+  return typeof persona === "string" && Object.hasOwn(AGENT_PERSONAS, persona)
+    ? persona
+    : DEFAULT_PERSONA;
 }
 
 function normalizeModel(model) {

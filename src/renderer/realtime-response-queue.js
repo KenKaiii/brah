@@ -4,27 +4,27 @@
 // sending `response.create` while another response is active fails with
 // `conversation_already_has_active_response`. Semantic VAD can also auto-create
 // a response the instant the user speaks, which races our own tool-output and
-// welcome creates. This tracks whether a response is active and queues a single
-// pending create, flushing it once the active response ends — the same pattern
-// production Realtime clients use (e.g. Automattic/wp-calypso).
+// welcome creates. This tracks whether a response is active and queues pending
+// creates in order, flushing one each time the active response ends.
 //
 // Kept DOM-free so it can be unit tested independently of the renderer.
 
 export function createRealtimeResponseCoordinator() {
   let activeResponse = false;
-  let pendingCreate = null;
+  const pendingCreates = [];
   let lastSentCreate = null;
+  let endingCall = false;
 
   return {
     // Decide whether a `response.create` event can be sent now. Returns the
-    // event to send, or null when it was queued because a response is active.
+    // event to send, or null when queued or suppressed during hang-up.
     requestCreate(event) {
+      if (endingCall) return null;
       if (activeResponse) {
-        pendingCreate = event;
+        pendingCreates.push(event);
         return null;
       }
       activeResponse = true;
-      pendingCreate = null;
       lastSentCreate = event;
       return event;
     },
@@ -38,9 +38,7 @@ export function createRealtimeResponseCoordinator() {
           return null;
         case "response.done": {
           activeResponse = false;
-          const flush = pendingCreate;
-          pendingCreate = null;
-          return flush;
+          return pendingCreates.shift() ?? null;
         }
         default:
           return null;
@@ -52,19 +50,26 @@ export function createRealtimeResponseCoordinator() {
     // to retry once the active response ends.
     noteActiveResponseConflict() {
       activeResponse = true;
-      if (pendingCreate === null) {
-        pendingCreate = lastSentCreate;
+      if (lastSentCreate && pendingCreates[0] !== lastSentCreate) {
+        pendingCreates.unshift(lastSentCreate);
       }
+    },
+
+    beginHangup() {
+      endingCall = true;
+      pendingCreates.length = 0;
+      lastSentCreate = null;
     },
 
     reset() {
       activeResponse = false;
-      pendingCreate = null;
+      pendingCreates.length = 0;
       lastSentCreate = null;
+      endingCall = false;
     },
 
     get state() {
-      return { activeResponse, hasPending: pendingCreate !== null };
+      return { activeResponse, hasPending: pendingCreates.length > 0 };
     },
   };
 }

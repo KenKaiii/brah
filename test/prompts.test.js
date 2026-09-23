@@ -8,6 +8,7 @@ import {
   DEFAULT_REALTIME_MODEL,
   DEFAULT_TASK_MODEL,
   DEFAULT_VOICE,
+  formatVoiceLabel,
   normalizeAgentProfile,
   REALTIME_MODELS,
   REALTIME_VOICES,
@@ -39,6 +40,8 @@ test("normalizeAgentProfile falls back to default voice for invalid values", () 
 test("normalizeAgentProfile falls back to default persona for unknown values", () => {
   assert.equal(normalizeAgentProfile({ persona: "wizard" }).persona, DEFAULT_PERSONA);
   assert.equal(normalizeAgentProfile({ persona: null }).persona, DEFAULT_PERSONA);
+  assert.equal(normalizeAgentProfile({ persona: "toString" }).persona, DEFAULT_PERSONA);
+  assert.equal(DEFAULT_PERSONA, "default");
 });
 
 test("normalizeAgentProfile passes through valid voice and persona", () => {
@@ -78,9 +81,32 @@ test("realtime model allowlist contains both tiers with labels", () => {
   }
 });
 
-test("cedar is in the realtime voice allowlist", () => {
-  assert.ok(REALTIME_VOICES.includes("cedar"));
-  assert.ok(REALTIME_VOICES.includes("marin"));
+test("voice list covers every Realtime voice, best tier first", () => {
+  assert.deepEqual(REALTIME_VOICES, [
+    "marin",
+    "cedar",
+    "alloy",
+    "ash",
+    "ballad",
+    "coral",
+    "echo",
+    "sage",
+    "shimmer",
+    "verse",
+  ]);
+  assert.equal(DEFAULT_VOICE, "marin");
+});
+
+test("voice labels show how each voice sounds and its tier", () => {
+  assert.equal(formatVoiceLabel("marin"), "Marin (Female · Best)");
+  assert.equal(formatVoiceLabel("cedar"), "Cedar (Male · Best)");
+  assert.equal(formatVoiceLabel("alloy"), "Alloy (Neutral · Standard)");
+  for (const voice of REALTIME_VOICES) {
+    assert.match(
+      formatVoiceLabel(voice),
+      /^[A-Z][a-z]+ \((Female|Male|Neutral) · (Best|Standard)\)$/,
+    );
+  }
 });
 
 test("buildAgentInstructions injects the persona block for non-default personas", () => {

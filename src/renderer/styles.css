@@ -42,7 +42,6 @@
   --radius-pill: 9999px;
 
   /* Shadows */
-  --shadow-window: 0 0 0 1px rgba(196, 200, 232, 0.06), 0 30px 80px rgba(0, 0, 0, 0.55);
   --shadow-pop: 0 0 0 1px rgba(196, 200, 232, 0.08), 0 18px 44px rgba(0, 0, 0, 0.5);
 
   /* Motion — one curve family, three durations. */
@@ -182,7 +181,9 @@ select:focus-visible,
     radial-gradient(140% 80% at 50% -12%, rgba(139, 140, 246, 0.12), transparent 58%),
     linear-gradient(180deg, rgba(14, 16, 25, 0.94), rgba(7, 8, 15, 0.96));
   backdrop-filter: blur(20px) saturate(1.15);
-  box-shadow: var(--shadow-window);
+  /* No CSS box-shadow: the panel fills the transparent window, so a shadow can
+     only paint into the corners outside the radius, leaving a dark ring around
+     the rounded edge. macOS draws the window's native shadow instead. */
   opacity: 0;
   transform: translateY(8px) scale(0.985);
   transform-origin: 100% 100%;
@@ -739,13 +740,13 @@ select:focus-visible,
 
 .state-dot.state-completed::after {
   position: absolute;
-  top: 2px;
-  left: 3.5px;
-  width: 3.5px;
-  height: 6px;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 7px;
   border: solid var(--bg-elevated);
   border-width: 0 1.5px 1.5px 0;
-  transform: rotate(45deg);
+  transform: translate(-50%, -60%) rotate(45deg);
   content: "";
 }
 
@@ -939,6 +940,45 @@ select:focus-visible,
   color: var(--text-3);
   font-size: 0.66rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* Save confirmation: a check pops in, text flashes green, then both settle to
+   the usual grey so the footer doesn't stay loud. */
+.panel-footer-text[data-state="saved"] {
+  font-weight: 600;
+  animation: status-saved-text 2400ms ease-out both;
+}
+
+.panel-footer-text[data-state="saved"]::before {
+  content: "\2713";
+  display: inline-block;
+  margin-right: 5px;
+  animation: status-saved-check 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.panel-footer-text[data-state="error"] {
+  color: var(--danger);
+}
+
+@keyframes status-saved-text {
+  0%,
+  45% {
+    color: var(--success);
+  }
+  100% {
+    color: var(--text-3);
+  }
+}
+
+@keyframes status-saved-check {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ---------- Selection action bar ---------- */
@@ -1729,6 +1769,11 @@ select:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .call-toast {
     animation-duration: 2600ms;
+  }
+
+  /* Keep the green-to-grey fade; drop the check's scale pop. */
+  .panel-footer-text[data-state="saved"]::before {
+    animation: none;
   }
 }
 

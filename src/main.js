@@ -1417,11 +1417,13 @@ function buildRealtimeSessionConfig(options) {
     audio: {
       input: {
         format: { type: "audio/pcm", rate: realtimeDefaults.sampleRate },
-        noise_reduction: { type: "near_field" },
+        // far_field suits laptop/desk mics (OpenAI docs); near_field is for headsets.
+        noise_reduction: { type: "far_field" },
         transcription: { model: "gpt-4o-transcribe" },
         turn_detection: {
           type: "semantic_vad",
-          eagerness: "high",
+          // "high" commits short noises as turns, causing phantom interruptions.
+          eagerness: "medium",
           create_response: true,
           interrupt_response: true,
         },
