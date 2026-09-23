@@ -59,6 +59,7 @@ import {
   migrateLegacyPlannerStore,
   updateTaskStatus,
 } from "./realtime/tools/planner-store.js";
+import { listSavedScreenshots } from "./realtime/tools/screenshot-list.js";
 import { loadWindowPosition, saveWindowPosition } from "./realtime/tools/window-state-store.js";
 
 const { autoUpdater } = electronUpdater;
@@ -871,36 +872,7 @@ async function deleteScreenshots(names) {
 }
 
 async function listScreenshots() {
-  const screenshotsDir = path.join(app.getPath("userData"), "screenshots");
-  let names;
-  try {
-    names = await fs.readdir(screenshotsDir);
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
-  const pngNames = names.filter((name) => name.toLowerCase().endsWith(".png"));
-  const entries = await Promise.all(
-    pngNames.map(async (name) => {
-      const filePath = path.join(screenshotsDir, name);
-      try {
-        const [stats, bytes] = await Promise.all([fs.stat(filePath), fs.readFile(filePath)]);
-        return {
-          name,
-          dataUrl: `data:image/png;base64,${bytes.toString("base64")}`,
-          createdAt: stats.mtimeMs,
-        };
-      } catch {
-        return null;
-      }
-    }),
-  );
-  return entries
-    .filter(Boolean)
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 30);
+  return listSavedScreenshots(path.join(app.getPath("userData"), "screenshots"));
 }
 
 async function revealScreenshot(name) {

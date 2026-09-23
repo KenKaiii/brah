@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pruneSavedScreenshots } from "./screenshot-retention.js";
 
 const sourceAliasTtlMs = 5 * 60 * 1000;
 const maxSources = 25;
@@ -261,14 +263,24 @@ async function captureScreenshot(args, options) {
   await fs.mkdir(screenshotsDir, { recursive: true });
   const filePath = path.join(
     screenshotsDir,
-    `screenshot-${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
+    `screenshot-${new Date(options.now?.() ?? Date.now()).toISOString().replace(/[:.]/g, "-")}-${randomUUID()}.png`,
   );
-  await fs.writeFile(filePath, imagePng);
+  await fs.writeFile(filePath, imagePng, { flag: "wx" });
   await logScreenshotEvent(options, "screenshot.capture.written", {
     path: filePath,
     dimensions: size,
     bytes: imagePng.length,
   });
+  try {
+    const retention = await pruneSavedScreenshots(screenshotsDir, {
+      protectedName: path.basename(filePath),
+    });
+    await logScreenshotEvent(options, "screenshot.capture.pruned", retention);
+  } catch (error) {
+    await logScreenshotEvent(options, "screenshot.capture.prune_failed", {
+      error: formatError(error),
+    });
+  }
 
   return {
     ok: true,

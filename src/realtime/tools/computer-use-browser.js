@@ -22,11 +22,20 @@ export async function createBrowserComputerTarget(options = {}) {
     headless: options.headless ?? false,
     args: [...safeChromiumArgs, ...(Array.isArray(options.launchArgs) ? options.launchArgs : [])],
   });
-  const context = await browser.newContext({ viewport });
-  const page = await context.newPage();
-
-  if (typeof options.url === "string" && options.url.trim()) {
-    await navigatePage(page, options.url.trim());
+  let page;
+  try {
+    const context = await browser.newContext({ viewport });
+    page = await context.newPage();
+    if (typeof options.url === "string" && options.url.trim()) {
+      await navigatePage(page, options.url.trim());
+    }
+  } catch (error) {
+    try {
+      await browser.close();
+    } catch {
+      // Keep the setup error as the reason this target could not be created.
+    }
+    throw error;
   }
 
   return {
