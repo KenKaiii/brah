@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acquireCallResources } from "../src/renderer/realtime-call-resources.js";
+import {
+  acquireCallResources,
+  shouldTryDefaultMicrophone,
+} from "../src/renderer/realtime-call-resources.js";
 
 test("releases microphone when secret request fails after microphone acquisition", async () => {
   let rejectSecret;
@@ -51,6 +54,15 @@ test("secret failure does not wait for microphone permission, but closes a late 
   releaseMicrophone({ getTracks: () => [{ stop: () => stops++ }] });
   await microphone.then(() => new Promise((resolve) => queueMicrotask(resolve)));
   assert.equal(stops, 1);
+});
+
+test("only device failures retry with the default mic, not permission denial", () => {
+  for (const name of ["NotFoundError", "OverconstrainedError", "NotReadableError"]) {
+    assert.equal(shouldTryDefaultMicrophone({ name }), true);
+  }
+  for (const name of ["NotAllowedError", "SecurityError", "AbortError"]) {
+    assert.equal(shouldTryDefaultMicrophone({ name }), false);
+  }
 });
 
 test("returns both resources when setup succeeds", async () => {

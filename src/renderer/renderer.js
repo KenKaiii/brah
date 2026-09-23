@@ -8,8 +8,13 @@ import {
 } from "../realtime/prompts.js";
 import { initClickSound } from "./click-sound.js";
 import { createPanelController } from "./panel.js";
-import { acquireCallResources } from "./realtime-call-resources.js";
-import { createRealtimePlaybackTracker, isBenignCancelError } from "./realtime-playback.js";
+import { acquireCallResources, shouldTryDefaultMicrophone } from "./realtime-call-resources.js";
+import { createRealtimeConnectionGuard } from "./realtime-connection-guard.js";
+import {
+  createHangupCompletion,
+  createRealtimePlaybackTracker,
+  isBenignCancelError,
+} from "./realtime-playback.js";
 import {
   createRealtimeResponseCoordinator,
   isActiveResponseConflictError,
@@ -95,6 +100,7 @@ let callGeneration = 0;
 let callStarting = false;
 let callStopping = false;
 let callOfferController = null;
+let connectionGuard = null;
 let callActivationPromise = null;
 // Ephemeral realtime secrets are short-lived; we prefetch one as soon as OpenAI
 // connects (and re-prime after each call) so call-start never blocks on the
@@ -114,6 +120,7 @@ const SHELL_FADE_MS = 130;
 let audioLevelMonitor = null;
 let pendingHangup = false;
 let hangupFallbackTimer = null;
+let hangupCompletion = null;
 const playbackTracker = createRealtimePlaybackTracker();
 const responseCoordinator = createRealtimeResponseCoordinator();
 const waitingSound = createWaitingSound();
@@ -433,11 +440,17 @@ function requestHangup() {
   }
   pendingHangup = true;
   setStatus("Ending call…");
-  // Prefer to let the model's goodbye response finish (handled on response.done),
-  // but guarantee teardown if that event never arrives.
+  hangupCompletion = createHangupCompletion(
+    () => playbackTracker.state,
+    () => {
+      void stopCall();
+    },
+  );
+  // Bound the wait if a playback-stop or response-done event never arrives.
   hangupFallbackTimer = setTimeout(() => {
     void stopCall();
   }, 5000);
+  hangupCompletion.observe("end_call");
 }
 
 function setStatus(message) {
@@ -1078,6 +1091,7 @@ async function startCall() {
     void populateMicDevices();
 
     const pc = new RTCPeerConnection();
+    let audioOutputBlocked = false;
     peerConnection = pc;
     const channel = pc.createDataChannel("oai-events");
     dataChannel = channel;
@@ -1085,21 +1099,48 @@ async function startCall() {
 
     pc.ontrack = (event) => {
       if (generation !== callGeneration) return;
-      const [stream] = event.streams;
+      const stream = event.streams[0] ?? new MediaStream([event.track]);
       remoteAudioElement.srcObject = stream;
+      const playRemoteAudio = () => {
+        if (generation !== callGeneration) return;
+        void remoteAudioElement.play().then(
+          () => {
+            if (generation !== callGeneration || !audioOutputBlocked) return;
+            audioOutputBlocked = false;
+            if (pc.connectionState === "connected") setStatus("Listening");
+          },
+          (error) => {
+            if (generation !== callGeneration) return;
+            audioOutputBlocked = true;
+            void writeRendererDiagnostic("call.audio.play_failed", formatRendererError(error));
+            setStatus("Audio output blocked");
+          },
+        );
+      };
+      playRemoteAudio();
+      // A remote track can arrive muted and start carrying audio later.
+      event.track?.addEventListener("unmute", playRemoteAudio, { once: true });
       audioLevelMonitor?.setRemoteStream(stream);
     };
+    connectionGuard = createRealtimeConnectionGuard(() => {
+      if (
+        generation === callGeneration &&
+        ["disconnected", "failed", "closed"].includes(pc.connectionState)
+      ) {
+        void stopCall();
+      }
+    });
     pc.onconnectionstatechange = () => {
       if (generation !== callGeneration) return;
+      connectionGuard.observe(pc.connectionState);
       void writeRendererDiagnostic("call.connection_state", {
         state: pc.connectionState,
       });
-      setStatus(formatConnectionState(pc.connectionState));
+      setStatus(
+        audioOutputBlocked ? "Audio output blocked" : formatConnectionState(pc.connectionState),
+      );
       if (pc.connectionState === "connected") {
         setMode("listening");
-      }
-      if (["closed", "disconnected", "failed"].includes(pc.connectionState)) {
-        void stopCall();
       }
     };
     channel.addEventListener("open", () => {
@@ -1160,7 +1201,11 @@ async function startCall() {
       connectionState: pc.connectionState,
     });
 
-    if (generation === callGeneration && pc.connectionState !== "connected") {
+    if (
+      generation === callGeneration &&
+      pc.connectionState !== "connected" &&
+      !audioOutputBlocked
+    ) {
       setStatus("Connecting");
     }
   } catch (error) {
@@ -1184,6 +1229,8 @@ async function stopCall() {
     ++callGeneration;
     callOfferController?.abort();
     callOfferController = null;
+    connectionGuard?.stop();
+    connectionGuard = null;
     audioLevelMonitor?.stop();
     audioLevelMonitor = null;
     setOrbLevel(0);
@@ -1205,10 +1252,12 @@ async function stopCall() {
       localStream = null;
     }
 
-    if (hangupFallbackTimer) {
+    if (hangupFallbackTimer !== null) {
       clearTimeout(hangupFallbackTimer);
       hangupFallbackTimer = null;
     }
+    hangupCompletion?.stop();
+    hangupCompletion = null;
     pendingHangup = false;
     if (welcomeMicGuardTimer !== null) {
       clearTimeout(welcomeMicGuardTimer);
@@ -1262,9 +1311,25 @@ async function stopCall() {
 
 async function handleRealtimeEvent(event, generation) {
   playbackTracker.observe(event);
+  hangupCompletion?.observe(event.type);
+  if (generation !== callGeneration) return;
   // The welcome greeting finished playing through the speakers — safe to listen.
-  if (welcomeMicGuardTimer !== null && event.type === "output_audio_buffer.stopped") {
+  if (event.type === "output_audio_buffer.stopped" && welcomeMicGuardTimer !== null) {
     endWelcomeMicGuard();
+  }
+  if (
+    event.type === "output_audio_buffer.stopped" ||
+    event.type === "output_audio_buffer.cleared"
+  ) {
+    if (pendingHangup) return;
+    if (
+      event.type === "output_audio_buffer.stopped" &&
+      !playbackTracker.state.hasActiveResponse &&
+      appShellElement.dataset.toolActivity !== "active"
+    ) {
+      setStatus("Listening");
+      setMode("listening");
+    }
   }
   if (event.type === "session.created") {
     // Ground truth for which model is actually running this call.
@@ -1317,10 +1382,8 @@ async function handleRealtimeEvent(event, generation) {
     // spoken reply is generated, so stopping here would cut the sound off mid-wait.
     // The sound is stopped when audio actually resumes (output_audio.delta) or the
     // user barges in (speech_started); call end calls reset().
-    if (pendingHangup) {
-      void stopCall();
-      return;
-    }
+    if (pendingHangup) return;
+    if (playbackTracker.state.isAudioPlaying) return;
     setStatus("Listening");
     setMode("listening");
     return;
@@ -1464,10 +1527,10 @@ async function acquireMicrophoneStream() {
   try {
     return await navigator.mediaDevices.getUserMedia({ audio: buildAudioConstraints() });
   } catch (error) {
-    if (!selectedMicId) {
+    if (!selectedMicId || !shouldTryDefaultMicrophone(error)) {
       throw error;
     }
-    await writeRendererDiagnostic("audio.mic.fallback_default", {
+    void writeRendererDiagnostic("audio.mic.fallback_default", {
       deviceId: selectedMicId,
       error: error instanceof Error ? error.name : String(error),
     });
@@ -1574,6 +1637,13 @@ function setMicrophoneMuted(muted) {
 }
 
 function sendRealtimeDataChannelEvent(event) {
+  if (dataChannel?.readyState !== "open") {
+    void writeRendererDiagnostic("realtime.send.skipped", {
+      type: event?.type,
+      readyState: dataChannel?.readyState ?? "missing",
+    });
+    return;
+  }
   if (event?.type === "response.create") {
     // Only one response may be in progress at a time. Gate creates through the
     // coordinator so a barge-in/VAD-initiated response doesn't collide with our
@@ -1583,13 +1653,6 @@ function sendRealtimeDataChannelEvent(event) {
       void writeRendererDiagnostic("realtime.response_create.queued", {});
       return;
     }
-  }
-  if (dataChannel?.readyState !== "open") {
-    void writeRendererDiagnostic("realtime.send.skipped", {
-      type: event?.type,
-      readyState: dataChannel?.readyState ?? "missing",
-    });
-    return;
   }
   void writeRendererDiagnostic("realtime.send", summarizeRealtimeClientEvent(event));
   dataChannel.send(JSON.stringify(event));
