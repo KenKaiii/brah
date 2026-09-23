@@ -2,7 +2,9 @@ import { executeComputerActions } from "./computer-use-actions.js";
 import { createBrowserComputerTarget } from "./computer-use-browser.js";
 import { createOsComputerTarget } from "./computer-use-os.js";
 
-const defaultComputerModel = "gpt-5.4";
+// gpt-5.4 is refused on the subscription route (probed 2026-09-23); main.js
+// normally passes the user's selected task model.
+const defaultComputerModel = "gpt-6-sol";
 const defaultEndpoint = "https://chatgpt.com/backend-api/codex/responses";
 const defaultOriginator = "ggcoder";
 

@@ -180,10 +180,15 @@
           </div>
           <div class="agent-form" role="group" aria-label="Settings fields">
             <label class="agent-field">
-              <span class="agent-label">Model</span>
+              <span class="agent-label">Voice model</span>
               <select id="settings-model" class="agent-select"></select>
             </label>
-            <div class="agent-field">
+            <label class="agent-field">
+              <span class="agent-label">Task model</span>
+              <select id="settings-task-model" class="agent-select"></select>
+              <span class="agent-hint">Used for computer control and saving memories.</span>
+            </label>
+            <div id="api-key-field" class="agent-field">
               <span class="agent-label-row">
                 <span class="agent-label">API key</span>
                 <span
@@ -212,9 +217,8 @@
             <div class="agent-field">
               <span class="agent-label">OAuth</span>
               <div class="settings-actions">
-                <button id="connect-openai" type="button" disabled>Connect OpenAI</button>
+                <button id="connect-openai" type="button">Connect OpenAI</button>
               </div>
-              <span class="agent-hint">Currently unavailable due to OpenAI changes.</span>
             </div>
           </div>
         </section>

@@ -29,15 +29,35 @@ function mockFetch(jsonContent) {
   });
 }
 
-test("extractMemory skips when no API key is provided", async () => {
+function sseResponse(finalText, { failed } = {}) {
+  const events = failed
+    ? [{ type: "response.failed", response: { error: { message: failed } } }]
+    : [
+        {
+          type: "response.output_item.done",
+          item: { type: "message", content: [{ type: "output_text", text: finalText }] },
+        },
+        { type: "response.completed", response: { id: "resp_1" } },
+      ];
+  return {
+    ok: true,
+    status: 200,
+    async text() {
+      return events.map((event) => `data: ${JSON.stringify(event)}\n`).join("\n");
+    },
+  };
+}
+
+test("extractMemory skips when neither a subscription nor an API key is provided", async () => {
   await withStore(async (storePath) => {
     const result = await extractMemory({
       transcript: [{ role: "user", text: "I live in Bali" }],
       apiKey: "",
+      subscription: { accessToken: "tok" },
       storePath,
     });
     assert.equal(result.status, "skipped");
-    assert.equal(result.reason, "no_api_key");
+    assert.equal(result.reason, "no_credentials");
     assert.equal(getAllFacts(storePath).length, 0);
   });
 });
@@ -175,6 +195,83 @@ test("extractMemory dedupes a log entry already present today", async () => {
     });
     assert.equal(second.savedLogs, 0);
     assert.equal(getDailyLog(undefined, storePath).content.split("\n").length, 1);
+  });
+});
+
+test("extractMemory prefers the subscription over an API key", async () => {
+  await withStore(async (storePath) => {
+    const requests = [];
+    const result = await extractMemory({
+      transcript: [{ role: "user", text: "I live in Bali" }],
+      apiKey: "sk-test",
+      subscription: { accessToken: "oauth-token", accountId: "acct_1" },
+      storePath,
+      fetchImpl: async (url, init) => {
+        requests.push({ url, init });
+        return sseResponse(
+          '```json\n{"facts":[{"category":"user_info","subject":"location","content":"Lives in Bali"}],"forget":[],"logs":[]}\n```',
+        );
+      },
+    });
+    assert.equal(result.status, "extracted");
+    assert.equal(result.savedFacts, 1);
+    assert.equal(requests.length, 1);
+    const [{ url, init }] = requests;
+    assert.equal(url, "https://chatgpt.com/backend-api/codex/responses");
+    assert.equal(init.headers.Authorization, "Bearer oauth-token");
+    assert.equal(init.headers["ChatGPT-Account-ID"], "acct_1");
+    const body = JSON.parse(init.body);
+    assert.equal(body.model, "gpt-6-sol");
+    assert.equal(body.stream, true);
+    assert.match(body.input[0].content[0].text, /I live in Bali/);
+    assert.equal(getAllFacts(storePath)[0].content, "Lives in Bali");
+  });
+});
+
+test("extractMemory sends the selected task model on the subscription route", async () => {
+  await withStore(async (storePath) => {
+    let body;
+    await extractMemory({
+      transcript: [{ role: "user", text: "hi" }],
+      subscription: { accessToken: "oauth-token", accountId: "acct_1", model: "gpt-6-luna" },
+      storePath,
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(init.body);
+        return sseResponse('{"facts":[],"forget":[],"logs":[]}');
+      },
+    });
+    assert.equal(body.model, "gpt-6-luna");
+  });
+});
+
+test("extractMemory uses the API key when no subscription is signed in", async () => {
+  await withStore(async (storePath) => {
+    let calledUrl;
+    const result = await extractMemory({
+      transcript: [{ role: "user", text: "hi" }],
+      apiKey: "sk-test",
+      storePath,
+      fetchImpl: async (url, init) => {
+        calledUrl = url;
+        assert.equal(init.headers.Authorization, "Bearer sk-test");
+        return mockFetch({ facts: [], forget: [], logs: [] })();
+      },
+    });
+    assert.equal(result.status, "extracted");
+    assert.equal(calledUrl, "https://api.openai.com/v1/chat/completions");
+  });
+});
+
+test("extractMemory reports an error when the subscription stream fails", async () => {
+  await withStore(async (storePath) => {
+    const result = await extractMemory({
+      transcript: [{ role: "user", text: "I live in Bali" }],
+      subscription: { accessToken: "oauth-token", accountId: "acct_1" },
+      storePath,
+      fetchImpl: async () => sseResponse("", { failed: "model overloaded" }),
+    });
+    assert.equal(result.status, "error");
+    assert.equal(getAllFacts(storePath).length, 0);
   });
 });
 

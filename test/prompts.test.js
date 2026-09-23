@@ -6,11 +6,29 @@ import {
   buildRealtimeInstructions,
   DEFAULT_PERSONA,
   DEFAULT_REALTIME_MODEL,
+  DEFAULT_TASK_MODEL,
   DEFAULT_VOICE,
   normalizeAgentProfile,
   REALTIME_MODELS,
   REALTIME_VOICES,
+  TASK_MODELS,
 } from "../src/realtime/prompts.js";
+
+test("task models are the GPT-6 tiers the subscription accepts, defaulting to Sol", () => {
+  assert.deepEqual(Object.keys(TASK_MODELS), ["gpt-6-sol", "gpt-6-luna", "gpt-6-astra"]);
+  assert.equal(DEFAULT_TASK_MODEL, "gpt-6-sol");
+  for (const { label } of Object.values(TASK_MODELS)) {
+    assert.match(label, /^GPT-6 /);
+  }
+});
+
+test("normalizeAgentProfile keeps a known task model and defaults anything else", () => {
+  assert.equal(normalizeAgentProfile({ taskModel: "gpt-6-luna" }).taskModel, "gpt-6-luna");
+  assert.equal(normalizeAgentProfile({ taskModel: "gpt-6-astra" }).taskModel, "gpt-6-astra");
+  assert.equal(normalizeAgentProfile({ taskModel: "gpt-5.6-luna" }).taskModel, DEFAULT_TASK_MODEL);
+  assert.equal(normalizeAgentProfile({ taskModel: "toString" }).taskModel, DEFAULT_TASK_MODEL);
+  assert.equal(normalizeAgentProfile({}).taskModel, DEFAULT_TASK_MODEL);
+});
 
 test("normalizeAgentProfile falls back to default voice for invalid values", () => {
   assert.equal(normalizeAgentProfile({ voice: "nope" }).voice, DEFAULT_VOICE);
@@ -35,16 +53,28 @@ test("normalizeAgentProfile falls back to default model for invalid values", () 
 });
 
 test("normalizeAgentProfile passes through allowlisted models", () => {
-  assert.equal(normalizeAgentProfile({ model: "gpt-realtime-2" }).model, "gpt-realtime-2");
-  assert.equal(normalizeAgentProfile({ model: "gpt-realtime-mini" }).model, "gpt-realtime-mini");
+  assert.equal(normalizeAgentProfile({ model: "gpt-realtime-2.1" }).model, "gpt-realtime-2.1");
+  assert.equal(
+    normalizeAgentProfile({ model: "gpt-realtime-2.1-mini" }).model,
+    "gpt-realtime-2.1-mini",
+  );
 });
 
-test("realtime model allowlist contains both tiers with cost hints", () => {
-  assert.ok("gpt-realtime-2" in REALTIME_MODELS);
-  assert.ok("gpt-realtime-mini" in REALTIME_MODELS);
+test("normalizeAgentProfile upgrades retired models to the same tier", () => {
+  assert.equal(normalizeAgentProfile({ model: "gpt-realtime-2" }).model, "gpt-realtime-2.1");
+  assert.equal(
+    normalizeAgentProfile({ model: "gpt-realtime-mini" }).model,
+    "gpt-realtime-2.1-mini",
+  );
+  assert.equal(normalizeAgentProfile({ model: "toString" }).model, DEFAULT_REALTIME_MODEL);
+});
+
+test("realtime model allowlist contains both tiers with labels", () => {
+  assert.deepEqual(Object.keys(REALTIME_MODELS), ["gpt-realtime-2.1", "gpt-realtime-2.1-mini"]);
+  assert.equal(DEFAULT_REALTIME_MODEL, "gpt-realtime-2.1");
   for (const model of Object.values(REALTIME_MODELS)) {
     assert.equal(typeof model.label, "string");
-    assert.match(model.costHint, /\$\d/);
+    assert.equal("costHint" in model, false);
   }
 });
 

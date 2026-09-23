@@ -50,19 +50,34 @@ export const REALTIME_VOICES = Object.freeze([
 export const DEFAULT_VOICE = "marin";
 
 export const REALTIME_MODELS = Object.freeze({
-  "gpt-realtime-2": {
-    label: "GPT Realtime 2",
-    costHint: "~$2.88/hr",
+  "gpt-realtime-2.1": {
+    label: "GPT Realtime 2.1",
     tier: "full",
   },
-  "gpt-realtime-mini": {
-    label: "GPT Realtime Mini",
-    costHint: "~$0.90/hr",
+  "gpt-realtime-2.1-mini": {
+    label: "GPT Realtime 2.1 Mini",
     tier: "mini",
   },
 });
 
-export const DEFAULT_REALTIME_MODEL = "gpt-realtime-2";
+export const DEFAULT_REALTIME_MODEL = "gpt-realtime-2.1";
+
+// Saved profiles may still name a retired model; keep the user on the same tier.
+const LEGACY_REALTIME_MODELS = Object.freeze({
+  "gpt-realtime-2": "gpt-realtime-2.1",
+  "gpt-realtime-mini": "gpt-realtime-2.1-mini",
+});
+
+// Text models for background work (computer use, memory extraction), run on
+// the ChatGPT subscription's Codex responses route. Only models that route
+// accepts belong here (probed 2026-09-23: gpt-6-terra and gpt-5.4* are refused).
+export const TASK_MODELS = Object.freeze({
+  "gpt-6-sol": { label: "GPT-6 Sol" },
+  "gpt-6-luna": { label: "GPT-6 Luna" },
+  "gpt-6-astra": { label: "GPT-6 Astra" },
+});
+
+export const DEFAULT_TASK_MODEL = "gpt-6-sol";
 
 export const AGENT_PERSONAS = Object.freeze({
   default: {
@@ -100,6 +115,7 @@ export const DEFAULT_AGENT_PROFILE = Object.freeze({
   voice: DEFAULT_VOICE,
   persona: DEFAULT_PERSONA,
   model: DEFAULT_REALTIME_MODEL,
+  taskModel: DEFAULT_TASK_MODEL,
 });
 
 export function buildWelcomeInstructions(profile = DEFAULT_AGENT_PROFILE) {
@@ -209,7 +225,14 @@ export function normalizeAgentProfile(profile) {
     voice: normalizeVoice(profile?.voice),
     persona: normalizePersona(profile?.persona),
     model: normalizeModel(profile?.model),
+    taskModel: normalizeTaskModel(profile?.taskModel),
   };
+}
+
+function normalizeTaskModel(model) {
+  return typeof model === "string" && Object.hasOwn(TASK_MODELS, model)
+    ? model
+    : DEFAULT_TASK_MODEL;
 }
 
 function normalizeVoice(voice) {
@@ -221,7 +244,15 @@ function normalizePersona(persona) {
 }
 
 function normalizeModel(model) {
-  return typeof model === "string" && model in REALTIME_MODELS ? model : DEFAULT_REALTIME_MODEL;
+  if (typeof model !== "string") {
+    return DEFAULT_REALTIME_MODEL;
+  }
+  if (Object.hasOwn(REALTIME_MODELS, model)) {
+    return model;
+  }
+  return Object.hasOwn(LEGACY_REALTIME_MODELS, model)
+    ? LEGACY_REALTIME_MODELS[model]
+    : DEFAULT_REALTIME_MODEL;
 }
 
 function normalizeGoals(goals) {

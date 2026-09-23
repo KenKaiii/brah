@@ -108,7 +108,7 @@ test("runComputerUseTask drives a Codex custom-tool loop and completes", async (
   assert.equal(requests[0].headers.originator, "ggcoder");
   assert.equal(requests[0].body.stream, true);
   assert.equal(requests[0].body.store, false);
-  assert.equal(requests[0].body.model, "gpt-5.4");
+  assert.equal(requests[0].body.model, "gpt-6-sol");
   assert.deepEqual(requests[0].body.include, ["reasoning.encrypted_content"]);
   assert.equal(requests[0].body.reasoning.summary, "auto");
   assert.equal(requests[0].body.reasoning.effort, "medium");

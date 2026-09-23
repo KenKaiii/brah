@@ -1,3 +1,4 @@
+import { parseCodexSseStream } from "./computer-use-tools.js";
 import { appendToDailyLog, getDailyLog } from "./daily-logs-store.js";
 import { deleteFactBySubject, getAllFacts, saveFact } from "./memory-store.js";
 
@@ -8,11 +9,16 @@ import { deleteFactBySubject, getAllFacts, saveFact } from "./memory-store.js";
 // the "subconscious"/sleep-time memory pattern used by PostHog, Letta, LangMem:
 // extraction is its own job, not a side-duty bolted onto the talker.
 //
-// Requires the API-key auth path — gpt-5.4-mini is a normal model and cannot go
-// through the OAuth/Codex realtime backend. With no key the caller no-ops.
+// Two auth paths: a signed-in ChatGPT subscription goes through the Codex
+// responses route with the user's selected task model (gpt-5.4-mini is refused
+// there; probed 2026-09-23), otherwise an API key goes through chat
+// completions. With neither, the caller no-ops.
 
 const EXTRACTOR_MODEL = "gpt-5.4-mini";
 const EXTRACTOR_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+const DEFAULT_SUBSCRIPTION_MODEL = "gpt-6-sol";
+const SUBSCRIPTION_EXTRACTOR_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses";
+const SUBSCRIPTION_ORIGINATOR = "ggcoder";
 const MAX_OUTPUT_TOKENS = 800;
 
 const FACT_CATEGORIES = Object.freeze([
@@ -61,7 +67,10 @@ Return ONLY this JSON object, with empty arrays where there is nothing to do:
  *
  * @param {object} params
  * @param {Array<{role: string, text: string}>} params.transcript Recent turns, oldest first.
- * @param {string} params.apiKey OpenAI API key (Bearer).
+ * @param {string} [params.apiKey] OpenAI API key (Bearer); used only without a subscription.
+ * @param {{accessToken: string, accountId: string, model?: string}} [params.subscription]
+ *   Signed-in ChatGPT subscription; takes precedence over the API key. `model` is the
+ *   user's selected task model.
  * @param {string} [params.userName] The user's name, for natural log phrasing; defaults to "the user".
  * @param {string} [params.storePath] SQLite path (defaults to the app DB).
  * @param {typeof fetch} [params.fetchImpl] Injectable fetch for tests.
@@ -71,13 +80,15 @@ Return ONLY this JSON object, with empty arrays where there is nothing to do:
 export async function extractMemory({
   transcript,
   apiKey,
+  subscription,
   userName,
   storePath,
   fetchImpl = globalThis.fetch,
   logger,
 } = {}) {
-  if (typeof apiKey !== "string" || !apiKey.trim()) {
-    return { status: "skipped", reason: "no_api_key" };
+  const auth = resolveAuth({ apiKey, subscription });
+  if (!auth) {
+    return { status: "skipped", reason: "no_credentials" };
   }
   const turns = normalizeTranscript(transcript);
   if (turns.length === 0) {
@@ -90,7 +101,7 @@ export async function extractMemory({
   let parsed;
   try {
     parsed = await requestExtraction({
-      apiKey,
+      auth,
       fetchImpl,
       currentFacts,
       todayLog,
@@ -156,8 +167,29 @@ export async function extractMemory({
   return { status: "extracted", savedFacts, forgotFacts, savedLogs };
 }
 
+function resolveAuth({ apiKey, subscription }) {
+  const accessToken = subscription?.accessToken;
+  const accountId = subscription?.accountId;
+  if (
+    typeof accessToken === "string" &&
+    accessToken &&
+    typeof accountId === "string" &&
+    accountId
+  ) {
+    const model =
+      typeof subscription.model === "string" && subscription.model.trim()
+        ? subscription.model.trim()
+        : DEFAULT_SUBSCRIPTION_MODEL;
+    return { type: "subscription", accessToken, accountId, model };
+  }
+  if (typeof apiKey === "string" && apiKey.trim()) {
+    return { type: "api-key", apiKey: apiKey.trim() };
+  }
+  return null;
+}
+
 async function requestExtraction({
-  apiKey,
+  auth,
   fetchImpl,
   currentFacts,
   todayLog,
@@ -177,10 +209,26 @@ async function requestExtraction({
 
   const userContent = `Current memory (facts already saved — reuse these exact category/subject keys when updating or correcting a topic; only add a new subject for a genuinely new topic):\n${factsContext}\n\nToday's daily log so far (do NOT log the same situation again, even reworded — only log a genuinely new event):\n${todayLogContext}\n\nLatest conversation turns:\n${transcriptText}`;
 
+  const content =
+    auth.type === "subscription"
+      ? await requestSubscriptionExtraction({ auth, fetchImpl, userName, userContent })
+      : await requestApiKeyExtraction({ auth, fetchImpl, userName, userContent });
+  if (typeof content !== "string" || !content.trim()) {
+    return { facts: [], forget: [], logs: [] };
+  }
+  const parsed = parseJsonObject(content);
+  return {
+    facts: Array.isArray(parsed.facts) ? parsed.facts : [],
+    forget: Array.isArray(parsed.forget) ? parsed.forget : [],
+    logs: Array.isArray(parsed.logs) ? parsed.logs : [],
+  };
+}
+
+async function requestApiKeyExtraction({ auth, fetchImpl, userName, userContent }) {
   const response = await fetchImpl(EXTRACTOR_ENDPOINT, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${auth.apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -194,22 +242,56 @@ async function requestExtraction({
       ],
     }),
   });
-
   const rawText = await response.text();
   if (!response.ok) {
     throw new Error(`Extractor request failed (${response.status}): ${rawText.slice(0, 300)}`);
   }
-  const payload = JSON.parse(rawText);
-  const content = payload?.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) {
-    return { facts: [], forget: [], logs: [] };
+  return JSON.parse(rawText)?.choices?.[0]?.message?.content;
+}
+
+// The Codex responses route streams SSE and has no JSON mode, so the prompt's
+// "return ONLY this JSON object" instruction carries the format.
+async function requestSubscriptionExtraction({ auth, fetchImpl, userName, userContent }) {
+  const response = await fetchImpl(SUBSCRIPTION_EXTRACTOR_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${auth.accessToken}`,
+      "ChatGPT-Account-ID": auth.accountId,
+      originator: SUBSCRIPTION_ORIGINATOR,
+      "OpenAI-Beta": "responses=experimental",
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify({
+      model: auth.model,
+      instructions: buildSystemPrompt(userName),
+      input: [
+        { type: "message", role: "user", content: [{ type: "input_text", text: userContent }] },
+      ],
+      store: false,
+      stream: true,
+      reasoning: { effort: "low" },
+    }),
+  });
+  const rawText = await response.text();
+  if (!response.ok) {
+    throw new Error(`Extractor request failed (${response.status}): ${rawText.slice(0, 300)}`);
   }
-  const parsed = JSON.parse(content);
-  return {
-    facts: Array.isArray(parsed.facts) ? parsed.facts : [],
-    forget: Array.isArray(parsed.forget) ? parsed.forget : [],
-    logs: Array.isArray(parsed.logs) ? parsed.logs : [],
-  };
+  const stream = parseCodexSseStream(rawText);
+  if (stream.error) {
+    throw new Error(`Extractor response failed: ${stream.error}`);
+  }
+  return stream.finalText;
+}
+
+// Tolerates a model wrapping its JSON in prose or a ``` fence.
+function parseJsonObject(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end < start) {
+    throw new Error("Extractor returned no JSON object.");
+  }
+  return JSON.parse(text.slice(start, end + 1));
 }
 
 function sanitizeFacts(facts) {

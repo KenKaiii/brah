@@ -32,6 +32,7 @@ import {
   recordActivity,
 } from "./realtime/tools/activity-store.js";
 import { loadAgentProfile, saveAgentProfile } from "./realtime/tools/agent-profile-store.js";
+import { parseCodexSseStream } from "./realtime/tools/computer-use-tools.js";
 import {
   deleteDailyLog,
   getAllDailyLogs,
@@ -91,7 +92,7 @@ const openAIAuthConfig = Object.freeze({
 });
 
 const realtimeDefaults = Object.freeze({
-  model: "gpt-realtime-2",
+  model: "gpt-realtime-2.1",
   voice: "marin",
   sampleRate: 24_000,
 });
@@ -392,10 +393,12 @@ ipcMain.handle("openai:get-status", async () => {
     loadOpenAIApiKey(),
   ]);
   const base = credentials ? credentialsToStatus(credentials) : { connected: false };
-  const authMethod = apiKey ? "api-key" : credentials ? "oauth" : null;
+  // Must mirror the precedence in openai:create-realtime-secret.
+  const authMethod = credentials ? "oauth" : apiKey ? "api-key" : null;
   return {
     ...base,
     connected: Boolean(apiKey) || base.connected,
+    oauthConnected: base.connected,
     authMethod,
     apiKey: apiKeyToStatus(apiKey),
   };
@@ -429,12 +432,20 @@ ipcMain.handle("openai:logout", async () => {
 });
 
 ipcMain.handle("openai:create-realtime-secret", async (_event, options = {}) => {
-  // API key takes precedence over OAuth: it is the path users explicitly pay
-  // for, and the OAuth realtime route is currently broken upstream (CLAUDE.md).
-  const apiKey = await loadOpenAIApiKey();
-  const credentials = apiKey ? null : await getFreshOpenAICredentials();
+  // A connected ChatGPT subscription takes precedence; the API key is only a
+  // fallback for when no subscription is signed in (or its refresh fails).
+  let credentials = null;
+  let refreshError = null;
+  try {
+    credentials = await getFreshOpenAICredentials();
+  } catch (error) {
+    refreshError = error;
+  }
+  const apiKey = credentials ? null : await loadOpenAIApiKey();
   if (!apiKey && !credentials) {
-    throw new Error("Add an API key or sign in to OpenAI before starting Realtime.");
+    throw (
+      refreshError ?? new Error("Add an API key or sign in to OpenAI before starting Realtime.")
+    );
   }
 
   const profile = loadAgentProfile();
@@ -557,6 +568,7 @@ ipcMain.handle("tools:execute", async (_event, name, args = {}) => {
             }
           : {}),
         originator: "ggcoder",
+        model: loadAgentProfile().taskModel,
         logger: createToolLogger(name),
         desktopCapturer,
         screen,
@@ -825,16 +837,34 @@ function deleteDailyLogs(ids) {
 }
 
 async function runMemoryExtraction(transcript) {
-  const apiKey = await loadOpenAIApiKey();
-  if (!apiKey) {
-    // The extractor needs the API-key path; gpt-5.4-mini can't go through the
-    // OAuth/Codex realtime backend. No key -> nothing is extracted.
-    return { status: "skipped", reason: "no_api_key" };
+  // Same precedence as realtime calls: a signed-in subscription wins; the API
+  // key is only a fallback when there is none (or its refresh fails).
+  let credentials = null;
+  try {
+    credentials = await getFreshOpenAICredentials();
+  } catch (error) {
+    void writeDiagnosticLog(
+      "memory.extract.refresh_failed",
+      sanitizeDiagnosticValue({ error: error.message }),
+    );
+  }
+  const profile = loadAgentProfile();
+  const subscription = credentials?.accountId
+    ? {
+        accessToken: credentials.accessToken,
+        accountId: credentials.accountId,
+        model: profile.taskModel,
+      }
+    : null;
+  const apiKey = subscription ? null : await loadOpenAIApiKey();
+  if (!subscription && !apiKey) {
+    return { status: "skipped", reason: "no_credentials" };
   }
   const result = await extractMemory({
     transcript,
+    subscription,
     apiKey,
-    userName: loadAgentProfile().name,
+    userName: profile.name,
     logger: (event, details) => void writeDiagnosticLog(event, sanitizeDiagnosticValue(details)),
   });
   if (result.status === "extracted") {
@@ -1403,8 +1433,9 @@ function buildRealtimeSessionConfig(options) {
       },
     },
     max_output_tokens: 4096,
-    // `reasoning` is only accepted by gpt-realtime-2; gpt-realtime/-mini reject
-    // it with 400 "Unsupported option for this model" (probed 2026-06-13).
+    // `reasoning` is only accepted by the gpt-realtime-2 family (2, 2.1, 2.1-mini);
+    // gpt-realtime/-mini reject it with 400 "Unsupported option for this model"
+    // (probed 2026-06-13).
     ...(model.startsWith("gpt-realtime-2") ? { reasoning: { effort: "minimal" } } : {}),
     tools: getRealtimeToolDefinitions(),
     tool_choice: "auto",
@@ -1447,10 +1478,99 @@ async function runRealtimeProbe() {
   ].join("\r\n");
   const out = {};
   try {
-    const credentials = await getFreshOpenAICredentials();
+    let credentials = null;
+    try {
+      credentials = await getFreshOpenAICredentials();
+    } catch (error) {
+      console.log(
+        `BRAH_PROBE_LOGIN refresh failed, opening sign-in: ${error.message.slice(0, 80)}`,
+      );
+    }
+    if (!credentials) {
+      await loginOpenAI();
+      credentials = await getFreshOpenAICredentials();
+    }
     out.hasCredentials = !!credentials;
+    if (credentials && process.env.BRAH_PROBE_MEMORY) {
+      // Real extractor over the subscription, into a throwaway DB.
+      const storePath = path.join(os.tmpdir(), `brah-probe-${Date.now()}`, "brah.db");
+      out.memory = await extractMemory({
+        transcript: [
+          { role: "user", text: "By the way, my sister Mia just moved to Lisbon." },
+          { role: "assistant", text: "Oh nice, that's a big move for her!" },
+        ],
+        subscription: {
+          accessToken: credentials.accessToken,
+          accountId: credentials.accountId,
+          model: process.env.BRAH_PROBE_TASK_MODEL || loadAgentProfile().taskModel,
+        },
+        storePath,
+        logger: (event, details) =>
+          console.log(`BRAH_PROBE_LOG ${event} ${JSON.stringify(details)}`),
+      });
+      out.facts = getAllFacts(storePath).map((fact) => `${fact.subject}: ${fact.content}`);
+      if (process.env.BRAH_PROBE_COMPUTER_USE) {
+        // Real browser computer-use loop against a public page; no OS control.
+        const result = await executeRealtimeTool(
+          "computer_use_task",
+          {
+            task: "Read the main page heading and report it exactly, then finish.",
+            target: "browser",
+            url: "https://example.com",
+          },
+          {
+            computerUse: {
+              openAI: { accessToken: credentials.accessToken, accountId: credentials.accountId },
+              originator: "ggcoder",
+              model: process.env.BRAH_PROBE_TASK_MODEL || loadAgentProfile().taskModel,
+            },
+          },
+        );
+        out.computerUse = {
+          status: result?.status,
+          finalText: String(result?.finalText ?? result?.message ?? "").slice(0, 200),
+        };
+      }
+      console.log(`BRAH_PROBE ${JSON.stringify(out)}`);
+      app.quit();
+      return;
+    }
+    if (credentials && process.env.BRAH_PROBE_TEXT_MODELS) {
+      // Which text models the subscription's Codex responses route accepts.
+      for (const textModel of process.env.BRAH_PROBE_TEXT_MODELS.split(",")) {
+        const res = await fetch("https://chatgpt.com/backend-api/codex/responses", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${credentials.accessToken}`,
+            "ChatGPT-Account-ID": credentials.accountId ?? "",
+            originator: "ggcoder",
+            "OpenAI-Beta": "responses=experimental",
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify({
+            model: textModel,
+            instructions: 'Reply with the JSON object {"ok":true} and nothing else.',
+            input: [
+              { type: "message", role: "user", content: [{ type: "input_text", text: "ping" }] },
+            ],
+            store: false,
+            stream: true,
+            reasoning: { effort: "low" },
+          }),
+        });
+        const text = await res.text();
+        out[`text:${textModel}`] = {
+          status: res.status,
+          body: res.ok ? parseCodexSseStream(text).finalText.slice(0, 200) : text.slice(0, 200),
+        };
+      }
+      console.log(`BRAH_PROBE ${JSON.stringify(out)}`);
+      app.quit();
+      return;
+    }
     if (credentials) {
-      const model = realtimeDefaults.model;
+      const model = process.env.BRAH_PROBE_MODEL || realtimeDefaults.model;
       const secret = await createRealtimeClientSecret(credentials.accessToken, { model });
       out.mint = { ok: true, value: `${secret.value.slice(0, 8)}\u2026` };
       const pub = await fetch(`https://api.openai.com/v1/realtime/calls?model=${model}`, {
@@ -1481,6 +1601,44 @@ async function runRealtimeProbe() {
         location: back.headers.get("location"),
         body: (await back.text()).slice(0, 200),
       };
+      // Codex's v3 "frameless" GPT-Live shape (openai/codex realtime_call.rs,
+      // methods_frameless_bidi.rs as of 2026-09-22): query flags, gpt-live model,
+      // frameless session JSON, client-side delegation.
+      const liveHeaders = {
+        Authorization: `Bearer ${credentials.accessToken}`,
+        "Content-Type": "application/json",
+        originator: "codex_cli_rs",
+        "User-Agent": "codex_cli_rs/0.0.0",
+        "OpenAI-Alpha": "quicksilver=v2",
+        ...(credentials.accountId ? { "chatgpt-account-id": credentials.accountId } : {}),
+      };
+      const liveVariants = [
+        ["liveNoVoice", {}],
+        ["liveMarin", { audio: { output: { voice: "marin" } } }],
+      ];
+      for (const [key, extra] of liveVariants) {
+        const live = await fetch(
+          "https://chatgpt.com/backend-api/codex/realtime/calls?intent=quicksilver&architecture=avas",
+          {
+            method: "POST",
+            headers: liveHeaders,
+            body: JSON.stringify({
+              sdp: offer,
+              session: {
+                model: "gpt-live-1-codex",
+                instructions: "hi",
+                delegation: { type: "client" },
+                ...extra,
+              },
+            }),
+          },
+        );
+        out[key] = {
+          status: live.status,
+          location: live.headers.get("location"),
+          body: (await live.text()).slice(0, 300),
+        };
+      }
     }
   } catch (error) {
     out.error = String(error?.stack || error);

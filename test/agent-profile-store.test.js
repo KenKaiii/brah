@@ -51,14 +51,24 @@ test("agent profile normalizes and persists name, about, and goals", async () =>
 
 test("agent profile persists the realtime model and rejects junk values", async () => {
   await withProfileDb((filePath) => {
-    const saved = saveAgentProfile({ name: "Sam", model: "gpt-realtime-mini" }, filePath);
-    assert.equal(saved.model, "gpt-realtime-mini");
+    const saved = saveAgentProfile({ name: "Sam", model: "gpt-realtime-2.1-mini" }, filePath);
+    assert.equal(saved.model, "gpt-realtime-2.1-mini");
 
     closeDatabase(filePath);
-    assert.equal(loadAgentProfile(filePath).model, "gpt-realtime-mini");
+    assert.equal(loadAgentProfile(filePath).model, "gpt-realtime-2.1-mini");
 
     const junk = saveAgentProfile({ name: "Sam", model: "gpt-5-turbo" }, filePath);
-    assert.equal(junk.model, "gpt-realtime-2");
+    assert.equal(junk.model, "gpt-realtime-2.1");
+  });
+});
+
+test("agent profile persists the task model alongside the realtime model", async () => {
+  await withProfileDb((filePath) => {
+    saveAgentProfile({ model: "gpt-realtime-2.1-mini", taskModel: "gpt-6-luna" }, filePath);
+    closeDatabase(filePath);
+    const reloaded = loadAgentProfile(filePath);
+    assert.equal(reloaded.taskModel, "gpt-6-luna");
+    assert.equal(reloaded.model, "gpt-realtime-2.1-mini");
   });
 });
 

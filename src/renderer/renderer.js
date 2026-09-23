@@ -4,6 +4,7 @@ import {
   normalizeAgentProfile,
   REALTIME_MODELS,
   REALTIME_VOICES,
+  TASK_MODELS,
 } from "../realtime/prompts.js";
 import { initClickSound } from "./click-sound.js";
 import { createPanelController } from "./panel.js";
@@ -14,6 +15,16 @@ import {
 } from "./realtime-response-queue.js";
 import { createRealtimeToolHandler } from "./realtime-tool-handler.js";
 import { createWaitingSound } from "./waiting-sound.js";
+
+// Readable badge text for the OS permission states from os-permissions.js.
+const permissionStatusLabels = Object.freeze({
+  granted: "Granted",
+  denied: "Denied",
+  restricted: "Restricted",
+  "not-determined": "Not asked",
+  unknown: "Unknown",
+  unsupported: "Not available",
+});
 
 const appShellElement = document.querySelector("#app-shell");
 const statusElement = document.querySelector("#status");
@@ -43,10 +54,12 @@ const settingsToggleButton = document.querySelector("#settings-toggle");
 const settingsPanelElement = document.querySelector("#settings-panel");
 const settingsBackButton = document.querySelector("#settings-back");
 const settingsModelSelect = document.querySelector("#settings-model");
+const settingsTaskModelSelect = document.querySelector("#settings-task-model");
 const apiKeyInput = document.querySelector("#api-key-input");
 const apiKeySaveButton = document.querySelector("#api-key-save");
 const apiKeyClearButton = document.querySelector("#api-key-clear");
 const apiKeyHintElement = document.querySelector("#api-key-hint");
+const apiKeyFieldElement = document.querySelector("#api-key-field");
 const apiKeyStatusElement = document.querySelector("#api-key-status");
 const agentStatusElement = document.querySelector("#agent-status");
 const callToggleButton = document.querySelector("#call-toggle");
@@ -68,6 +81,9 @@ const toolActivityLabels = {
 };
 
 let isOpenAIConnected = false;
+// True while an OAuth login is in flight; keeps the button from starting a
+// second login (and a second callback server on the same port).
+let isConnectingOpenAI = false;
 // Latest `openai:get-status` payload (authMethod + masked API key state); used
 // for the footer indicator and the API key form, never holds the key itself.
 let openAIStatus = null;
@@ -336,12 +352,22 @@ function modelTier(model) {
   // Prefix-match so server-side dated aliases ("gpt-realtime-mini-2025-10-06")
   // keep their real tier. Unknown models render with the loud "expensive"
   // styling on purpose: never show the cheap green for something unidentified.
-  for (const [id, { tier }] of Object.entries(REALTIME_MODELS)) {
-    if (model === id || model.startsWith(`${id}-`)) {
-      return tier;
+  // Longest id wins so "gpt-realtime-2.1-mini" isn't claimed by "gpt-realtime-2.1".
+  const id = matchRealtimeModelId(model);
+  return id ? REALTIME_MODELS[id].tier : "full";
+}
+
+function matchRealtimeModelId(model) {
+  if (typeof model !== "string") {
+    return null;
+  }
+  let best = null;
+  for (const id of Object.keys(REALTIME_MODELS)) {
+    if ((model === id || model.startsWith(`${id}-`)) && (!best || id.length > best.length)) {
+      best = id;
     }
   }
-  return "full";
+  return best;
 }
 
 function modelBadgeText(model) {
@@ -368,7 +394,8 @@ function confirmCallModel(serverModel) {
   callModelElement.dataset.tier = modelTier(serverModel);
   // Tolerate server-side dated aliases (e.g. "gpt-realtime-mini-2025-10-06")
   // resolving the requested model; anything else is a real mismatch.
-  const matches = selectedCallModel !== null && serverModel.startsWith(selectedCallModel);
+  const matches =
+    selectedCallModel !== null && matchRealtimeModelId(serverModel) === selectedCallModel;
   if (matches) {
     callModelElement.dataset.state = "confirmed";
     callModelElement.textContent = modelBadgeText(serverModel);
@@ -431,9 +458,7 @@ function setOrbLevel(level) {
 function setOpenAIConnected(connected) {
   isOpenAIConnected = connected;
   connectOpenAIButton.textContent = connected ? "Reconnect OpenAI" : "Connect OpenAI";
-  // OAuth realtime is broken upstream (see CLAUDE.md); the button stays
-  // disabled until that clears. API key is the working path.
-  connectOpenAIButton.disabled = true;
+  connectOpenAIButton.disabled = isConnectingOpenAI;
   updateOpenAIIndicator();
   callToggleButton.disabled = !connected;
   headerCallButton.disabled = !connected;
@@ -592,8 +617,20 @@ function updateOpenAIIndicator() {
 function renderApiKeyState() {
   const keyState = openAIStatus?.apiKey;
   const present = Boolean(keyState?.present);
+  // With the ChatGPT subscription signed in, calls never use the key, so the
+  // whole API key field is locked and dimmed.
+  const subscription = Boolean(openAIStatus?.oauthConnected);
+  apiKeyFieldElement.classList.toggle("is-locked", subscription);
+  apiKeyInput.disabled = subscription;
+  apiKeySaveButton.disabled = subscription;
+  apiKeyClearButton.disabled = subscription || !present;
+  if (subscription) {
+    apiKeyHintElement.textContent = "Not needed while your ChatGPT subscription is connected.";
+    apiKeyStatusElement.textContent = "Not used";
+    apiKeyStatusElement.dataset.connected = "false";
+    return;
+  }
   apiKeyHintElement.textContent = present ? `…${keyState.last4}` : "";
-  apiKeyClearButton.disabled = !present;
   // The key is verified against the API before it's ever saved, so a saved key
   // is an authenticated one — "Connected" is truthful here.
   apiKeyStatusElement.textContent = present ? "Connected" : "Not set";
@@ -616,7 +653,7 @@ async function saveApiKey() {
   } catch (error) {
     apiKeyHintElement.textContent = error.message;
   } finally {
-    apiKeySaveButton.disabled = false;
+    apiKeySaveButton.disabled = Boolean(openAIStatus?.oauthConnected);
   }
 }
 
@@ -648,6 +685,23 @@ async function handleModelSelection() {
   }
 }
 
+// The task model is read by main on each computer-use/memory run, so nothing
+// needs re-priming here.
+async function handleTaskModelSelection() {
+  const previous = agentProfile.taskModel;
+  try {
+    agentProfile = normalizeAgentProfile(
+      await window.brah.setAgentProfile({
+        ...agentProfile,
+        taskModel: settingsTaskModelSelect.value,
+      }),
+    );
+  } catch (error) {
+    settingsTaskModelSelect.value = previous;
+    await writeRendererDiagnostic("settings.task_model.save_failed", formatRendererError(error));
+  }
+}
+
 async function refreshOsPermissions() {
   const permissions = await window.brah.getOsPermissions();
   renderOsPermissions(permissions);
@@ -676,10 +730,18 @@ function populateAgentOptions() {
     }),
   );
   settingsModelSelect.replaceChildren(
-    ...Object.entries(REALTIME_MODELS).map(([id, { label, costHint }]) => {
+    ...Object.entries(REALTIME_MODELS).map(([id, { label }]) => {
       const option = document.createElement("option");
       option.value = id;
-      option.textContent = `${label} (${costHint})`;
+      option.textContent = label;
+      return option;
+    }),
+  );
+  settingsTaskModelSelect.replaceChildren(
+    ...Object.entries(TASK_MODELS).map(([id, { label }]) => {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = label;
       return option;
     }),
   );
@@ -692,6 +754,7 @@ function renderAgentProfile() {
   agentVoiceSelect.value = agentProfile.voice;
   agentPersonaSelect.value = agentProfile.persona;
   settingsModelSelect.value = agentProfile.model;
+  settingsTaskModelSelect.value = agentProfile.taskModel;
 }
 
 async function saveAgentProfile() {
@@ -701,8 +764,9 @@ async function saveAgentProfile() {
     goals: agentGoalsInput.value.split("\n"),
     voice: agentVoiceSelect.value,
     persona: agentPersonaSelect.value,
-    // The model lives in Settings, not the Agent form; preserve it as-is.
+    // The models live in Settings, not the Agent form; preserve them as-is.
     model: agentProfile.model,
+    taskModel: agentProfile.taskModel,
   };
   agentStatusElement.textContent = "Saving\u2026";
   try {
@@ -730,8 +794,8 @@ function renderOsPermissions(permissions) {
       const label = document.createElement("span");
       label.textContent = permission.label;
       const status = document.createElement("span");
-      status.className = `permission-status${permission.status === "granted" ? " is-granted" : ""}`;
-      status.textContent = permission.status;
+      status.className = `permission-status is-${permission.status}`;
+      status.textContent = permissionStatusLabels[permission.status] ?? permission.status;
       title.append(label, status);
 
       const description = document.createElement("p");
@@ -782,6 +846,10 @@ async function openOsPermissionSettings(id) {
 }
 
 async function connectOpenAI() {
+  if (isConnectingOpenAI) {
+    return;
+  }
+  isConnectingOpenAI = true;
   connectOpenAIButton.disabled = true;
   callToggleButton.disabled = true;
   headerCallButton.disabled = true;
@@ -795,14 +863,16 @@ async function connectOpenAI() {
       setOpenAIConnected(false);
     }
     await window.brah.loginOpenAI();
-    // Re-pull the full status so the indicator reflects authMethod (a saved API
-    // key still wins over the fresh OAuth login for realtime calls).
+    // Re-pull the full status so the indicator and API key lock reflect the
+    // fresh OAuth login (a connected subscription wins over a saved API key).
     await refreshOpenAIStatus();
     setMode("idle");
   } catch (error) {
     setOpenAIConnected(false);
     setStatus(`Connect failed: ${error.message}`);
   } finally {
+    isConnectingOpenAI = false;
+    connectOpenAIButton.disabled = false;
     callToggleButton.disabled = !isOpenAIConnected;
     headerCallButton.disabled = !isOpenAIConnected;
   }
@@ -1721,6 +1791,9 @@ settingsBackButton.addEventListener("click", () => {
 });
 settingsModelSelect.addEventListener("change", () => {
   void handleModelSelection();
+});
+settingsTaskModelSelect.addEventListener("change", () => {
+  void handleTaskModelSelection();
 });
 permissionsToggleButton.addEventListener("click", () => {
   setMenuOpen(false);

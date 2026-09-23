@@ -1,76 +1,61 @@
 :root {
-  /* Surfaces — Superwhisper foundation (Midnight Eclipse / Starless Night) blended
-     with Dimension's translucent HUD chrome. */
-  --bg-deep: #000000; /* Midnight Eclipse — page canvas */
-  --bg-elevated: #030719; /* Starless Night — subtle elevation */
-  --bg-overlay: #001b33; /* Deep Ocean — specialized cool surface */
-  --hairline: rgba(229, 229, 229, 0.1);
-  --hairline-strong: rgba(229, 229, 229, 0.2);
-  --raised: rgba(255, 255, 255, 0.04);
-  --raised-hover: rgba(255, 255, 255, 0.07);
-  --surface-translucent: rgba(0, 0, 0, 0.2);
-  --surface-ghost: rgba(212, 212, 212, 0.08);
+  /* One palette anchored on the orb's indigo (hue ~275). Neutrals carry a trace
+     of that hue so surfaces read as one material instead of black + blue + purple. */
+  --bg-deep: #07080f;
+  --bg-elevated: #0e1019;
+  --hairline: rgba(196, 200, 232, 0.1);
+  --hairline-strong: rgba(196, 200, 232, 0.18);
+  --raised: rgba(196, 200, 255, 0.045);
+  --raised-hover: rgba(196, 200, 255, 0.08);
+  --surface-translucent: rgba(7, 8, 15, 0.35);
 
-  /* Text — Frost / Ghostly Gray ramp */
-  --text: #ffffff;
-  --text-2: rgba(229, 231, 235, 0.78);
-  --text-3: rgba(229, 231, 235, 0.46);
+  /* Text ramp — every step measured on --bg-elevated (16.7 / 9.6 / 6.0 : 1). */
+  --text: #eef0f8;
+  --text-2: #b4b8cc;
+  --text-3: #8b90a8;
 
-  /* Accent — Superwhisper Electric Blue, with Sky Blue for emphasis */
-  --accent: #0088ff;
-  --accent-bright: #60a5fa;
-  --accent-soft: rgba(0, 136, 255, 0.16);
-  --accent-line: rgba(0, 136, 255, 0.4);
+  /* Accent — the orb's indigo. Used for selection, focus and links only. */
+  --accent: #9d9ff9;
+  --accent-soft: rgba(139, 140, 246, 0.14);
+  --accent-line: rgba(157, 159, 249, 0.5);
 
-  /* Semantics — Vivid Green / Sunshine Yellow / Crimson Red */
-  --success: #16c253;
-  --success-soft: rgba(22, 194, 83, 0.16);
-  --success-line: rgba(22, 194, 83, 0.4);
-  --warn: #ffdd00;
-  --warn-soft: rgba(255, 221, 0, 0.14);
-  --warn-line: rgba(255, 221, 0, 0.4);
-  --danger: #ff5252;
-  --danger-soft: rgba(255, 82, 82, 0.16);
-  --danger-line: rgba(255, 82, 82, 0.4);
+  /* Light action surface (primary buttons) and its paired ink. */
+  --surface-light: #e8eaf5;
+  --surface-light-hover: #ffffff;
+  --ink-on-light: #0e1019;
 
-  /* Nebula gradient (orb + atmospheric panels) — Dimension Gradient Aura +
-     Interactive Glow combined with Superwhisper Magenta Burst + Deep Ocean. */
-  --nebula-1: #4867af;
-  --nebula-2: #6b62f2;
-  --nebula-3: #b855e7;
-  --nebula-4: #001b33;
+  /* Status marks — carried by a small dot, never by tinted fills. */
+  --success: #3ecf7a;
+  --warn: #f0b43c;
+  --danger: #f07070;
+  /* Solid destructive fill and its paired ink (4.7 : 1). */
+  --danger-fill: #c93a44;
+  /* Hover darkens (5.9 : 1) so the hover state never loses contrast. */
+  --danger-fill-hover: #b0303a;
+  --ink-on-danger: #fff5f5;
 
-  /* Radii — Dimension cards (24px) / callouts (10px) / pill (9999px) +
-     Superwhisper default 9px / button 4px. */
+  /* Radii */
   --radius-window: 24px;
-  --radius-lg: 16px;
-  --radius-md: 10px;
+  --radius-md: 12px;
   --radius-sm: 9px;
-  --radius-xs: 4px;
+  --radius-badge: 6px;
   --radius-pill: 9999px;
 
-  /* Buttons — flat ghost surfaces; no more raised plastic. Existing rules that
-     compose --btn-sheen / --btn-raise pick up the new translucent language. */
-  --btn-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
-  --btn-sheen-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
-  --btn-raise: none;
-  --btn-raise-hover: none;
+  /* Shadows */
+  --shadow-window: 0 0 0 1px rgba(196, 200, 232, 0.06), 0 30px 80px rgba(0, 0, 0, 0.55);
+  --shadow-pop: 0 0 0 1px rgba(196, 200, 232, 0.08), 0 18px 44px rgba(0, 0, 0, 0.5);
 
-  /* Shadows — Dimension's three-layer diffused drop + window frame */
-  --shadow-card: drop-shadow(rgba(255, 255, 255, 0.02) 0 3px 4.5px)
-    drop-shadow(rgba(0, 0, 0, 0.04) 0 10px 8px) drop-shadow(rgba(0, 0, 0, 0.1) 0 4px 3px);
-  --shadow-window: 0 0 0 1px rgba(229, 229, 229, 0.06), 0 30px 80px rgba(0, 0, 0, 0.55);
-  --shadow-icon-hover: rgba(255, 255, 255, 0.2) 0 0 0 2px inset;
-
-  /* Motion */
+  /* Motion — one curve family, three durations. */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
   --dur: 180ms;
+  --dur-slow: 280ms;
 
   color: var(--text);
   background: transparent;
-  font-family:
-    "Inter", Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: "Inter", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
 }
 
@@ -93,7 +78,16 @@ button {
 }
 
 ::selection {
-  background: var(--accent-soft);
+  background: rgba(139, 140, 246, 0.35);
+}
+
+/* Keyboard focus: one ring everywhere. Pointer clicks never match
+   :focus-visible on buttons/selects, so no ring sticks after a click. */
+button:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Scrollbars */
@@ -125,12 +119,11 @@ button {
   background-color: rgba(255, 255, 255, 0.24);
 }
 
-.panel[hidden],
-.app-menu[hidden],
-.permissions-panel[hidden],
-.agent-panel[hidden],
-.settings-panel[hidden] {
-  display: none;
+/* The JS hides elements with the `hidden` attribute; component rules that set
+   `display` would otherwise override the UA's display:none and keep them
+   visible (and clickable). One global rule keeps `hidden` authoritative. */
+[hidden] {
+  display: none !important;
 }
 
 .app-shell {
@@ -186,17 +179,17 @@ button {
   border: 1px solid var(--hairline);
   border-radius: var(--radius-window);
   background:
-    radial-gradient(140% 80% at 50% -12%, rgba(107, 98, 242, 0.14), transparent 58%),
-    radial-gradient(120% 70% at 80% 120%, rgba(72, 103, 175, 0.1), transparent 60%),
-    linear-gradient(180deg, rgba(10, 10, 10, 0.92), rgba(3, 7, 25, 0.96));
+    radial-gradient(140% 80% at 50% -12%, rgba(139, 140, 246, 0.12), transparent 58%),
+    linear-gradient(180deg, rgba(14, 16, 25, 0.94), rgba(7, 8, 15, 0.96));
   backdrop-filter: blur(20px) saturate(1.15);
   box-shadow: var(--shadow-window);
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(8px) scale(0.985);
+  transform-origin: 100% 100%;
   pointer-events: none;
   transition:
-    opacity 160ms var(--ease-out),
-    transform 160ms var(--ease-out);
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out);
 }
 
 .panel.is-open {
@@ -215,7 +208,7 @@ button {
   border-bottom: 1px solid var(--hairline);
 }
 
-/* Pill-circular ghost button — matches Dimension's compact navigation pills. */
+/* Round ghost button; the glyph morphs into a close mark while the menu is open. */
 .menu-button {
   display: grid;
   place-items: center;
@@ -228,27 +221,25 @@ button {
   cursor: pointer;
   transition:
     border-color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out);
+    background-color var(--dur) var(--ease-out);
 }
 
-.menu-button:hover {
+.menu-button:hover,
+.menu-button[aria-expanded="true"] {
   border-color: var(--hairline-strong);
   background: var(--raised-hover);
-}
-
-.menu-button[aria-expanded="true"] {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
 }
 
 .menu-glyph,
 .menu-glyph::before,
 .menu-glyph::after {
-  width: 15px;
+  width: 14px;
   height: 1.5px;
   border-radius: 2px;
   background: var(--text);
-  transition: transform var(--dur) var(--ease-out);
+  transition:
+    transform var(--dur-slow) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
 }
 
 .menu-glyph {
@@ -271,6 +262,18 @@ button {
   top: 5px;
 }
 
+.menu-button[aria-expanded="true"] .menu-glyph {
+  background-color: transparent;
+}
+
+.menu-button[aria-expanded="true"] .menu-glyph::before {
+  transform: translateY(5px) rotate(45deg);
+}
+
+.menu-button[aria-expanded="true"] .menu-glyph::after {
+  transform: translateY(-5px) rotate(-45deg);
+}
+
 .panel-title {
   flex: 1;
   font-family: Geist, "Inter", sans-serif;
@@ -280,47 +283,119 @@ button {
   color: var(--text);
 }
 
-/* Superwhisper-style status pill: full pill radius, Frost text on translucent
-   surface, vivid status dot driving the color story. */
-.openai-indicator {
+/* ---------- Status badges (one treatment product-wide) ----------
+   Ink and mark: neutral surface, readable ink, and a small solid dot that
+   carries the only colour. Small radius (buttons own the capsule shape),
+   sentence case, no border, no glow. The word always says the status too,
+   so colour is never the only signal. */
+.openai-indicator,
+.priority-pill,
+.status-badge,
+.permission-status,
+.call-model {
+  --mark: var(--text-3);
+  position: relative;
+  z-index: 1;
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6px;
-  padding: 4px 11px 4px 9px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-pill);
+  padding: 3px 8px 3px 7px;
+  border-radius: var(--radius-badge);
   color: var(--text-2);
-  background: var(--raised);
-  font-size: 0.58rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  background: var(--raised-hover);
+  font-family: "Inter", sans-serif;
+  font-size: 0.64rem;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0;
+  white-space: nowrap;
+  transition:
+    color var(--dur) var(--ease-out),
+    background-color var(--dur) var(--ease-out);
 }
 
-.openai-indicator::before {
+.openai-indicator::before,
+.priority-pill::before,
+.status-badge::before,
+.permission-status::before,
+.call-model::before {
   width: 6px;
   height: 6px;
+  flex: none;
   border-radius: 50%;
-  background: var(--text-3);
-  box-shadow: 0 0 0 0 transparent;
+  background: var(--mark);
+  transition: background-color var(--dur) var(--ease-out);
   content: "";
 }
 
-.openai-indicator[data-connected="true"] {
-  color: var(--success);
-  border-color: var(--success-line);
-  background: var(--success-soft);
+/* Priority words arrive lowercase from the planner. */
+.priority-pill {
+  text-transform: capitalize;
 }
 
-.openai-indicator[data-connected="true"]::before {
-  background: var(--success);
-  box-shadow: 0 0 8px rgba(22, 194, 83, 0.7);
+.openai-indicator[data-connected="true"],
+.permission-status.is-granted,
+.status-badge.status-completed,
+.call-model[data-state="confirmed"][data-tier="mini"] {
+  --mark: var(--success);
+  color: var(--text);
+}
+
+.priority-medium,
+.permission-status.is-not-determined,
+.status-badge.status-max_steps,
+.status-badge.status-cancelled,
+.status-badge.status-permission_required,
+.call-model[data-state="confirmed"][data-tier="full"] {
+  --mark: var(--warn);
+}
+
+.priority-high,
+.permission-status.is-denied,
+.permission-status.is-restricted,
+.status-badge.status-error,
+.status-badge.status-invalid_arguments,
+.call-model[data-state="mismatch"] {
+  --mark: var(--danger);
+  color: var(--text);
+}
+
+.priority-low {
+  color: var(--text-3);
+  background: transparent;
+}
+
+/* ---------- Buttons ----------
+   Primary: light surface + dark ink. Destructive: solid red + paired ink,
+   reserved for hanging up and stopping a task. Everything else is a ghost. */
+.header-call,
+.selection-done,
+.agent-save {
+  color: var(--ink-on-light);
+  background: var(--surface-light);
+}
+
+.header-call:hover:not(:disabled),
+.selection-done:hover,
+.agent-save:hover {
+  background: var(--surface-light-hover);
+}
+
+.header-call.is-active,
+.call-end,
+.tool-activity-stop {
+  color: var(--ink-on-danger);
+  background: var(--danger-fill);
+}
+
+.header-call.is-active:hover:not(:disabled),
+.call-end:hover:not(:disabled),
+.tool-activity-stop:hover:not(:disabled) {
+  background: var(--danger-fill-hover);
 }
 
 /* ---------- Header call control ---------- */
-/* Superwhisper "Header Download Button": Frost background, Midnight Eclipse
-   text, full pill radius. The active (in-call) state switches to a Crimson
-   Red ghost pill so it never competes visually with the orb. */
 .header-call {
   display: inline-flex;
   align-items: center;
@@ -330,25 +405,17 @@ button {
   padding: 0 14px;
   border: 0;
   border-radius: var(--radius-pill);
-  color: #000000;
-  background: #ffffff;
-  box-shadow: none;
   cursor: pointer;
   font-family: Geist, "Inter", sans-serif;
   font-size: 0.78rem;
   font-weight: 600;
+  line-height: 1.3;
   letter-spacing: -0.01em;
   transition:
-    background var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out),
-    transform var(--dur) var(--ease-out),
-    opacity var(--dur) var(--ease-out),
-    color var(--dur) var(--ease-out);
-}
-
-.header-call:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow-icon-hover);
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur) var(--ease-out);
 }
 
 .header-call:active:not(:disabled) {
@@ -360,20 +427,15 @@ button {
   opacity: 0.4;
 }
 
-.header-call.is-active {
-  color: var(--danger);
-  background: var(--danger-soft);
-  box-shadow: inset 0 0 0 1px var(--danger-line);
-}
-
-.header-call.is-active:hover:not(:disabled) {
-  background: rgba(255, 82, 82, 0.24);
-  box-shadow: inset 0 0 0 1px var(--danger);
-}
-
 .header-call-icon {
   display: block;
   flex: none;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+/* The handset tips down while in a call: a hang-up cue without new copy. */
+.header-call.is-active .header-call-icon {
+  transform: rotate(135deg);
 }
 
 /* ---------- Dropdown menu ---------- */
@@ -389,13 +451,11 @@ button {
   padding: 6px;
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, rgba(10, 10, 10, 0.96), rgba(3, 7, 25, 0.97));
+  background: rgba(14, 16, 25, 0.97);
   backdrop-filter: blur(20px);
-  box-shadow:
-    0 0 0 1px rgba(229, 229, 229, 0.06),
-    0 24px 56px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-pop);
   transform-origin: top left;
-  animation: menu-in 160ms var(--ease-out);
+  animation: menu-in var(--dur) var(--ease-out);
 }
 
 @keyframes menu-in {
@@ -408,7 +468,7 @@ button {
 .menu-item {
   display: flex;
   align-items: center;
-  padding: 9px 10px;
+  padding: 8px 10px;
   border: 0;
   border-radius: var(--radius-sm);
   color: var(--text);
@@ -416,16 +476,16 @@ button {
   cursor: pointer;
   font-size: 0.76rem;
   font-weight: 500;
+  line-height: 1.3;
   letter-spacing: -0.01em;
   text-align: left;
   transition:
-    background var(--dur) var(--ease-out),
-    color var(--dur) var(--ease-out);
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 
 .menu-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
+  background: var(--raised-hover);
 }
 
 .menu-item:disabled {
@@ -433,21 +493,38 @@ button {
   color: var(--text-3);
 }
 
-/* ---------- Tabs (Dimension floating-pill segmented control) ---------- */
+/* ---------- Tabs: segmented control with a sliding thumb ----------
+   panel.js sets --tab-index / --tab-count; the thumb glides between equal
+   slots instead of each tab repainting its own background. */
 .panel-tabs {
+  --tab-index: 0;
+  --tab-count: 5;
+  position: relative;
   display: flex;
-  gap: 2px;
   margin: 11px 13px 4px;
   padding: 3px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
   background: var(--surface-translucent);
-  backdrop-filter: blur(4px);
+}
+
+.panel-tabs::before {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--tab-count));
+  border-radius: var(--radius-pill);
+  background: var(--surface-light);
+  transform: translateX(calc(var(--tab-index) * 100%));
+  transition: transform var(--dur-slow) var(--ease-out);
+  content: "";
 }
 
 .panel-tab {
+  position: relative;
   flex: 1;
-  padding: 6px 6px;
+  padding: 6px;
   border: 0;
   border-radius: var(--radius-pill);
   color: var(--text-2);
@@ -455,11 +532,9 @@ button {
   cursor: pointer;
   font-size: 0.69rem;
   font-weight: 600;
+  line-height: 1.3;
   letter-spacing: -0.01em;
-  transition:
-    color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out);
+  transition: color var(--dur) var(--ease-out);
 }
 
 .panel-tab:hover {
@@ -467,43 +542,42 @@ button {
 }
 
 .panel-tab.is-active {
-  color: #000000;
-  background: var(--text);
-  box-shadow: none;
+  color: var(--ink-on-light);
 }
 
-/* ---------- Memory sub-tabs ---------- */
+/* ---------- Memory sub-tabs: underline tabs, a quieter second level ---------- */
 .panel-subtabs {
   display: flex;
-  gap: 4px;
-  margin: 2px 13px 0;
-  padding: 0 1px;
+  gap: 14px;
+  margin: 4px 19px 0;
+  border-bottom: 1px solid var(--hairline);
 }
 
 .panel-subtab {
-  padding: 4px 10px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-pill);
-  color: var(--text-2);
+  position: relative;
+  margin-bottom: -1px;
+  padding: 6px 0 7px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-3);
   background: transparent;
   cursor: pointer;
-  font-size: 0.64rem;
+  font-size: 0.68rem;
   font-weight: 600;
+  line-height: 1.3;
   letter-spacing: -0.01em;
   transition:
     color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out),
     border-color var(--dur) var(--ease-out);
 }
 
 .panel-subtab:hover {
-  color: var(--text);
+  color: var(--text-2);
 }
 
 .panel-subtab.is-active {
   color: var(--text);
-  border-color: var(--text-3);
-  background: var(--surface-translucent);
+  border-bottom-color: var(--text);
 }
 
 /* ---------- Body ---------- */
@@ -524,15 +598,15 @@ button {
 @keyframes item-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.99);
+    transform: translateY(6px);
   }
 }
 
 .panel-body > *,
 .screenshot-grid > *,
 .permission-item {
-  animation: item-in 300ms var(--ease-out) backwards;
-  animation-delay: calc(var(--stagger, 0) * 26ms);
+  animation: item-in var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger, 0) * 24ms);
 }
 
 /* Silent in-place refreshes (e.g. after delete/complete) must not reanimate. */
@@ -541,19 +615,17 @@ button {
   animation: none;
 }
 
-/* Editorial section labels — Inter at tight cap-tracking, Pewter for restraint. */
 .panel-section-header {
-  margin: 16px 6px 6px;
+  margin: 16px 11px 6px;
   color: var(--text-3);
   font-family: Geist, "Inter", sans-serif;
-  font-size: 0.6rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .panel-section-header:first-child {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 /* ---------- Rows ---------- */
@@ -562,33 +634,17 @@ button {
   display: flex;
   align-items: flex-start;
   gap: 11px;
-  margin-bottom: 4px;
-  padding: 8px 11px;
+  margin-bottom: 2px;
+  padding: 9px 11px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   transition:
-    background var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out);
-}
-
-.panel-row::before {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(220px circle at 50% -40%, rgba(0, 136, 255, 0.12), transparent 70%);
-  opacity: 0;
-  transition: opacity var(--dur) var(--ease-out);
-  pointer-events: none;
-  content: "";
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
 .panel-row:hover {
-  border-color: var(--hairline);
   background: var(--raised);
-}
-
-.panel-row:hover::before {
-  opacity: 1;
 }
 
 .is-selectable {
@@ -596,14 +652,14 @@ button {
   user-select: none;
 }
 
-.panel-row.is-selected {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px rgba(0, 136, 255, 0.12);
+.is-selectable:active {
+  background: var(--raised-hover);
 }
 
-.panel-row.is-selected::before {
-  opacity: 1;
+/* Selected: neutral lift + accent edge; ink stays ink. */
+.panel-row.is-selected {
+  border-color: var(--accent-line);
+  background: var(--raised-hover);
 }
 
 .panel-row-block {
@@ -613,15 +669,11 @@ button {
 }
 
 .panel-row-content {
-  position: relative;
-  z-index: 1;
   flex: 1;
   min-width: 0;
 }
 
 .panel-row-head {
-  position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -630,24 +682,21 @@ button {
 }
 
 .panel-row-title {
-  position: relative;
-  z-index: 1;
   min-width: 0;
   color: var(--text);
   font-size: 0.8rem;
   font-weight: 600;
+  line-height: 1.35;
   letter-spacing: -0.015em;
   overflow-wrap: anywhere;
 }
 
 .panel-row-subtext {
-  position: relative;
-  z-index: 1;
   min-width: 0;
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: var(--text-2);
   font-size: 0.71rem;
-  line-height: 1.35;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
@@ -657,28 +706,24 @@ button {
 }
 
 .panel-row-meta {
-  position: relative;
-  z-index: 1;
   margin: 6px 0 0;
   color: var(--text-3);
-  font-size: 0.62rem;
-  letter-spacing: 0.01em;
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ---------- Task state dot ---------- */
+/* ---------- Task state mark ---------- */
 .state-dot {
   position: relative;
-  z-index: 1;
   flex-shrink: 0;
-  width: 12px;
-  height: 12px;
-  margin-top: 3px;
-  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
   border: 1.5px solid var(--text-3);
-}
-
-.state-dot.state-todo {
-  background: transparent;
+  border-radius: 50%;
+  transition:
+    border-color var(--dur) var(--ease-out),
+    background-color var(--dur) var(--ease-out);
 }
 
 .state-dot.state-in_progress {
@@ -686,80 +731,38 @@ button {
   background: conic-gradient(var(--accent) 0 50%, transparent 50% 100%);
 }
 
+/* Completed draws a check inside a filled disc rather than a glowing dot. */
 .state-dot.state-completed {
   border-color: var(--success);
   background: var(--success);
-  box-shadow: 0 0 8px rgba(22, 194, 83, 0.5);
 }
 
-/* ---------- Pills / badges — Superwhisper Badge spec (true pill) ---------- */
-.priority-pill,
-.status-badge {
-  position: relative;
-  z-index: 1;
-  flex-shrink: 0;
-  padding: 3px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  font-size: 0.55rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.state-dot.state-completed::after {
+  position: absolute;
+  top: 2px;
+  left: 3.5px;
+  width: 3.5px;
+  height: 6px;
+  border: solid var(--bg-elevated);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  content: "";
 }
 
-.priority-high {
-  color: var(--danger);
-  border-color: var(--danger-line);
-  background: var(--danger-soft);
-}
-
-.priority-medium {
-  color: var(--warn);
-  border-color: var(--warn-line);
-  background: var(--warn-soft);
-}
-
-.priority-low {
-  color: var(--text-3);
-  border-color: var(--hairline);
-  background: transparent;
+.panel-row:has(.state-completed) .panel-row-title {
+  color: var(--text-2);
 }
 
 .calendar-time {
-  position: relative;
-  z-index: 1;
   flex-shrink: 0;
   width: 62px;
   padding-top: 1px;
-  color: var(--accent);
+  color: var(--text);
   font-family: Geist, "Inter", sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
-}
-
-.status-badge {
-  color: var(--text-3);
-  border-color: var(--hairline);
-  background: var(--raised);
-}
-
-.status-badge.status-completed {
-  color: var(--success);
-  border-color: var(--success-line);
-  background: var(--success-soft);
-}
-
-.status-badge.status-error {
-  color: var(--danger);
-  border-color: var(--danger-line);
-  background: var(--danger-soft);
-}
-
-.status-badge.status-max_steps {
-  color: var(--warn);
-  border-color: var(--warn-line);
-  background: var(--warn-soft);
 }
 
 /* ---------- Screenshots ---------- */
@@ -788,11 +791,20 @@ button {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  color: #fff;
-  background: var(--accent);
+  color: var(--ink-on-light);
+  background: var(--surface-light);
   font-size: 0.6rem;
   font-weight: 700;
+  line-height: 1;
+  animation: check-in var(--dur) var(--ease-out);
   content: "\2713";
+}
+
+@keyframes check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
 }
 
 .screenshot-thumb {
@@ -805,24 +817,23 @@ button {
   transition:
     border-color var(--dur) var(--ease-out),
     box-shadow var(--dur) var(--ease-out),
-    transform var(--dur) var(--ease-out);
+    filter var(--dur) var(--ease-out);
 }
 
 .screenshot-thumb:hover {
   border-color: var(--hairline-strong);
-  transform: translateY(-1px);
+  filter: brightness(1.08);
 }
 
 .screenshot-card.is-selected .screenshot-thumb {
-  border-color: var(--accent-line);
-  box-shadow:
-    0 0 0 1px var(--accent),
-    0 0 16px rgba(0, 136, 255, 0.3);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .screenshot-caption {
   color: var(--text-3);
-  font-size: 0.62rem;
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .screenshot-reveal {
@@ -833,12 +844,13 @@ button {
   color: var(--text-2);
   background: var(--raised);
   cursor: pointer;
-  font-size: 0.58rem;
+  font-size: 0.64rem;
   font-weight: 600;
+  line-height: 1.3;
   transition:
-    color var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out);
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
 }
 
 .screenshot-reveal:hover {
@@ -858,23 +870,28 @@ button {
   min-height: 220px;
   padding: 24px;
   text-align: center;
-  animation: body-in 260ms var(--ease-out);
+  animation: body-in var(--dur-slow) var(--ease-out);
 }
 
-/* A tiny nebula token — Interactive Glow + Magenta Burst behind a hairline
-   ring, echoing the orb's palette at micro scale. */
+/* A miniature of the orb: the one place the nebula palette appears outside it. */
 .panel-empty::before {
-  width: 44px;
-  height: 44px;
-  border: 1px solid var(--hairline-strong);
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 38% 32%, rgba(107, 98, 242, 0.45), transparent 60%),
-    radial-gradient(circle at 70% 70%, rgba(184, 85, 231, 0.32), transparent 65%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 0 24px rgba(107, 98, 242, 0.25);
+    radial-gradient(circle at 36% 30%, rgba(157, 159, 249, 0.55), transparent 62%),
+    radial-gradient(circle at 70% 72%, rgba(184, 85, 231, 0.35), transparent 66%), var(--raised);
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  animation: empty-breathe 4s var(--ease-in-out) infinite;
   content: "";
+}
+
+@keyframes empty-breathe {
+  50% {
+    transform: scale(1.06);
+    opacity: 0.8;
+  }
 }
 
 .panel-empty-title {
@@ -893,15 +910,24 @@ button {
   line-height: 1.4;
 }
 
+/* Loading: the orb breathes faster and the title dims. */
+.panel-empty.is-loading::before {
+  animation-duration: 1.4s;
+}
+
+.panel-empty.is-loading .panel-empty-title {
+  color: var(--text-3);
+}
+
 /* ---------- Footer — compact utility row with hairline divider ---------- */
 .panel-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 11px 13px;
   border-top: 1px solid var(--hairline);
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(7, 8, 15, 0.3);
 }
 
 .panel-footer-text {
@@ -911,8 +937,8 @@ button {
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--text-3);
-  font-size: 0.62rem;
-  letter-spacing: 0.04em;
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Selection action bar ---------- */
@@ -931,13 +957,13 @@ button {
   justify-content: space-between;
   gap: 10px;
   padding: 22px 16px 16px;
-  background: linear-gradient(180deg, transparent, rgba(3, 7, 25, 0.96) 48%);
+  background: linear-gradient(180deg, transparent, var(--bg-elevated) 48%);
   opacity: 0;
   transform: translateY(10px);
   pointer-events: none;
   transition:
-    opacity 200ms var(--ease-out),
-    transform 200ms var(--ease-out);
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out);
 }
 
 .panel-selection-bar.is-visible {
@@ -953,10 +979,10 @@ button {
   display: inline-flex;
   align-items: center;
   min-height: 30px;
-  color: var(--text-3);
-  font-size: 0.62rem;
-  line-height: 1;
-  letter-spacing: 0.04em;
+  color: var(--text-2);
+  font-size: 0.72rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .panel-selection-actions {
@@ -973,17 +999,17 @@ button {
   height: 30px;
   padding: 0 13px;
   border: 0;
-  border-radius: var(--radius-sm);
-  color: #fff;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   font-family: Geist, "Inter", sans-serif;
   font-size: 0.76rem;
   font-weight: 600;
+  line-height: 1.3;
   letter-spacing: -0.01em;
   transition:
-    background var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out),
-    transform var(--dur) var(--ease-out);
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 
 .selection-action:active {
@@ -995,30 +1021,16 @@ button {
   flex: none;
 }
 
-/* Superwhisper "Header Download Button" — Frost pill for primary action. */
-.selection-done {
-  color: #000000;
-  background: #ffffff;
-  border-radius: var(--radius-pill);
-  box-shadow: none;
-}
-
-.selection-done:hover {
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow-icon-hover);
-}
-
-/* Crimson Red ghost pill for destructive action. */
+/* Delete is a ghost with red ink: it sits beside the primary, so it must not
+   out-shout it. The destructive red fill is kept for hang-up / stop. */
 .selection-delete {
   color: var(--danger);
-  background: var(--danger-soft);
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 1px var(--danger-line);
+  background: var(--raised-hover);
 }
 
 .selection-delete:hover {
-  background: rgba(255, 82, 82, 0.24);
-  box-shadow: inset 0 0 0 1px var(--danger);
+  color: var(--ink-on-danger);
+  background: var(--danger-fill);
 }
 
 .mic-picker {
@@ -1034,27 +1046,30 @@ button {
   display: block;
 }
 
+/* Chevron is inset 8px from the end edge; text reserves 8 + 11 + 5px. */
 .mic-select {
   max-width: 190px;
-  padding: 4px 20px 4px 8px;
+  padding-block: 4px;
+  padding-inline: 9px 24px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-pill);
   color: var(--text-2);
   background-color: var(--raised);
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e5e7eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b4b8cc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 6px center;
+  background-position: right 8px center;
   background-size: 11px;
   cursor: pointer;
   font: inherit;
-  font-size: 0.6rem;
+  font-size: 0.64rem;
+  line-height: 1.3;
   text-overflow: ellipsis;
   transition:
-    color var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out),
-    background-color var(--dur) var(--ease-out);
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
 }
 
 .mic-select:hover {
@@ -1063,25 +1078,11 @@ button {
   background-color: var(--raised-hover);
 }
 
-.mic-select:focus-visible {
-  outline: none;
-  border-color: var(--hairline-strong);
-}
-
 .openai-indicator-footer {
-  flex: none;
   margin-left: auto;
-  gap: 5px;
-  padding: 2px 8px 2px 7px;
-  font-size: 0.5rem;
 }
 
-.openai-indicator-footer::before {
-  width: 5px;
-  height: 5px;
-}
-
-/* ---------- Permissions full view ---------- */
+/* ---------- Sub-views (permissions / agent / settings) ---------- */
 .permissions-panel,
 .agent-panel,
 .settings-panel {
@@ -1093,11 +1094,18 @@ button {
   overflow: hidden;
   border-radius: var(--radius-window);
   background:
-    radial-gradient(140% 80% at 50% -10%, rgba(107, 98, 242, 0.12), transparent 58%),
-    radial-gradient(120% 70% at 85% 115%, rgba(72, 103, 175, 0.08), transparent 60%),
-    linear-gradient(180deg, rgba(10, 10, 10, 0.96), rgba(3, 7, 25, 0.97));
+    radial-gradient(140% 80% at 50% -10%, rgba(139, 140, 246, 0.1), transparent 58%),
+    linear-gradient(180deg, rgba(14, 16, 25, 0.97), rgba(7, 8, 15, 0.98));
   backdrop-filter: blur(20px);
-  animation: body-in 200ms var(--ease-out);
+  animation: view-in var(--dur-slow) var(--ease-out);
+}
+
+/* Sub-views slide in from the trailing edge, like a pushed navigation level. */
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
 }
 
 .agent-form {
@@ -1117,15 +1125,12 @@ button {
 
 .agent-label {
   font-family: Geist, "Inter", sans-serif;
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
+  letter-spacing: -0.005em;
+  color: var(--text-2);
 }
 
-/* Superwhisper "Form Input" — semi-transparent Frost fill at 10% over Midnight,
-   9px radius, snug padding. */
 .agent-input,
 .agent-textarea,
 .agent-select {
@@ -1134,13 +1139,21 @@ button {
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(196, 200, 255, 0.05);
   font: inherit;
   font-size: 0.8rem;
+  line-height: 1.35;
   resize: none;
   transition:
-    border-color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out);
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.agent-input:hover:not(:disabled),
+.agent-textarea:hover,
+.agent-select:hover {
+  border-color: var(--hairline-strong);
 }
 
 .agent-input::placeholder,
@@ -1148,30 +1161,34 @@ button {
   color: var(--text-3);
 }
 
+/* Chevron inset 11px from the end edge; text reserves 11 + 14 + 7px. */
 .agent-select {
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  padding-right: 32px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23e5e7eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  padding-inline-end: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b4b8cc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 11px center;
   background-size: 14px;
 }
 
+/* Text fields show focus for any modality (typing needs it); selects only for
+   keyboard, so a closed native popup never leaves a ring behind. */
 .agent-input:focus,
 .agent-textarea:focus,
-.agent-select:focus {
+.agent-select:focus-visible {
   outline: none;
-  border-color: var(--accent-line);
-  background: rgba(255, 255, 255, 0.08);
+  /* Solid accent so the focus edge clears 3 : 1 against the field. */
+  border-color: var(--accent);
+  background-color: rgba(196, 200, 255, 0.07);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .agent-hint {
-  font-size: 0.66rem;
+  font-size: 0.68rem;
   line-height: 1.5;
   color: var(--text-3);
-  letter-spacing: 0.005em;
 }
 
 /* Settings has fewer, denser controls than the Agent form, so it gets a more
@@ -1211,28 +1228,20 @@ button {
   text-align: right;
 }
 
-/* Frost pill for the primary save action — matches selection-done / header-call. */
+/* Primary save action (colour pair lives in the shared button block). */
 .agent-save {
   flex: none;
   padding: 6px 16px;
   border: 0;
   border-radius: var(--radius-pill);
-  color: #000000;
-  background: #ffffff;
-  box-shadow: none;
   cursor: pointer;
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 600;
+  line-height: 1.3;
   letter-spacing: -0.01em;
   transition:
-    background var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out),
-    transform var(--dur) var(--ease-out);
-}
-
-.agent-save:hover {
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow-icon-hover);
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 
 .agent-save:active {
@@ -1259,19 +1268,25 @@ button {
   background: var(--raised);
   cursor: pointer;
   transition:
-    color var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out);
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
 }
 
 .view-back svg {
   display: block;
+  transition: transform var(--dur) var(--ease-out);
 }
 
 .view-back:hover {
   color: var(--text);
   border-color: var(--hairline-strong);
   background: var(--raised-hover);
+}
+
+/* Directional nudge on the back arrow: the icon moves, not the button. */
+.view-back:hover svg {
+  transform: translateX(-2px);
 }
 
 .view-title {
@@ -1289,8 +1304,7 @@ button {
   padding: 6px 13px 16px;
 }
 
-/* Dimension "Ghost Button" treatment — transparent face + hairline + pill radius.
-   Shared by all header utility actions and permission item actions. */
+/* Ghost buttons shared by header utilities, permission and settings actions. */
 .view-header button:not(.view-back),
 .permission-actions button,
 .settings-actions button {
@@ -1300,27 +1314,43 @@ button {
   color: var(--text-2);
   background: var(--raised);
   cursor: pointer;
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  line-height: 1.3;
   transition:
-    color var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out);
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
 }
 
 .view-header button:not(.view-back):hover,
-.permission-actions button:hover,
+.permission-actions button:hover:not(:disabled),
 .settings-actions button:hover {
   color: var(--text);
   border-color: var(--hairline-strong);
   background: var(--raised-hover);
 }
 
-.settings-actions button:disabled {
+.settings-actions button:disabled,
+.permission-actions button:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.settings-actions button:disabled {
   pointer-events: none;
+}
+
+/* API key field while the ChatGPT subscription is connected: not needed, so
+   the whole field is dimmed and inert. */
+.agent-field.is-locked .agent-label-row,
+.agent-field.is-locked .agent-input {
+  opacity: 0.4;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.agent-input:disabled {
+  cursor: default;
 }
 
 .permission-item {
@@ -1339,24 +1369,6 @@ button {
   font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: -0.015em;
-}
-
-.permission-status {
-  padding: 3px 10px;
-  border: 1px solid var(--warn-line);
-  border-radius: var(--radius-pill);
-  color: var(--warn);
-  background: var(--warn-soft);
-  font-size: 0.55rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.permission-status.is-granted {
-  color: var(--success);
-  border-color: var(--success-line);
-  background: var(--success-soft);
 }
 
 .permission-description,
@@ -1397,12 +1409,13 @@ button {
     height 380ms var(--ease-out);
 }
 
-.fab-orb:hover:not(:disabled) {
-  transform: scale(1.02);
+/* Hover brightens the orb instead of lifting it; press still gives it a squeeze. */
+.fab-orb:hover:not(:disabled) .siri-orb {
+  --orb-brightness: calc(1.08 + var(--orb-level) * 0.22);
 }
 
 .fab-orb:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 .fab-orb:disabled {
@@ -1625,12 +1638,9 @@ button {
   border-color: transparent;
   border-radius: var(--radius-pill);
   background:
-    radial-gradient(120% 200% at 0% 50%, rgba(107, 98, 242, 0.18), transparent 55%),
-    radial-gradient(120% 200% at 100% 50%, rgba(184, 85, 231, 0.12), transparent 55%),
-    linear-gradient(180deg, rgba(10, 10, 10, 0.92), rgba(3, 7, 25, 0.96));
-  box-shadow:
-    0 0 0 1px rgba(229, 229, 229, 0.08),
-    0 18px 48px rgba(0, 0, 0, 0.55);
+    radial-gradient(120% 200% at 0% 50%, rgba(139, 140, 246, 0.16), transparent 55%),
+    linear-gradient(180deg, rgba(14, 16, 25, 0.94), rgba(7, 8, 15, 0.96));
+  box-shadow: var(--shadow-pop);
   backdrop-filter: blur(20px) saturate(1.15);
 }
 
@@ -1667,10 +1677,8 @@ button {
   max-width: 100%;
   padding: 5px 11px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, rgba(18, 18, 22, 0.96), rgba(6, 9, 26, 0.97));
-  box-shadow:
-    0 0 0 1px rgba(229, 229, 229, 0.08),
-    0 10px 26px rgba(0, 0, 0, 0.5);
+  background: rgba(14, 16, 25, 0.96);
+  box-shadow: var(--shadow-pop);
   backdrop-filter: blur(16px) saturate(1.1);
   color: var(--text);
   font-family: Geist, "Inter", sans-serif;
@@ -1689,8 +1697,14 @@ button {
   height: 6px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+  background: var(--success);
+}
+
+/* Ellipsis must live on the text span: it doesn't apply to a flex container. */
+.call-toast-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @keyframes call-toast-life {
@@ -1738,19 +1752,12 @@ button {
   height: 7px;
   border-radius: 50%;
   background: var(--danger);
-  box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.55);
-  animation: call-live-pulse 1.6s var(--ease-out) infinite;
+  animation: call-live-pulse 1.6s var(--ease-in-out) infinite;
 }
 
 @keyframes call-live-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.55);
-  }
-  70% {
-    box-shadow: 0 0 0 6px rgba(255, 82, 82, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 82, 82, 0);
+  50% {
+    opacity: 0.35;
   }
 }
 
@@ -1763,42 +1770,11 @@ button {
   color: var(--text);
 }
 
-/* model badge — truthful indicator of the model the server is running.
- * Pending (unconfirmed) is dim, mini is green, the full model is loud amber,
- * and a server/selection mismatch turns it red. */
-.call-model {
-  padding: 1px 7px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-pill);
-  font-family: Geist, "Inter", sans-serif;
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  color: var(--text-2);
-}
-
+/* Model badge — truthful indicator of the model the server is running. Uses the
+ * shared badge treatment: pending = grey mark, mini = green, full (the costly
+ * model) = amber, server/selection mismatch = red. */
 .call-model[data-state="pending"] {
   color: var(--text-3);
-  border-style: dashed;
-}
-
-.call-model[data-state="confirmed"][data-tier="mini"] {
-  color: #4ade80;
-  border-color: rgba(74, 222, 128, 0.45);
-  background: rgba(74, 222, 128, 0.12);
-}
-
-.call-model[data-state="confirmed"][data-tier="full"] {
-  color: #fbbf24;
-  border-color: rgba(251, 191, 36, 0.5);
-  background: rgba(251, 191, 36, 0.14);
-}
-
-.call-model[data-state="mismatch"] {
-  color: #f87171;
-  border-color: rgba(248, 113, 113, 0.55);
-  background: rgba(248, 113, 113, 0.16);
 }
 
 /* waveform canvas — only during a live call */
@@ -1815,7 +1791,7 @@ button {
     transform 340ms var(--ease-out);
 }
 
-/* End button — Crimson Red ghost pill that lives inside the floating call bar. */
+/* End button — solid destructive fill (colour pair in the shared button block). */
 .call-end {
   display: inline-flex;
   align-items: center;
@@ -1826,40 +1802,30 @@ button {
   padding: 0 14px;
   border: 0;
   border-radius: var(--radius-pill);
-  color: var(--danger);
-  background: var(--danger-soft);
-  box-shadow: inset 0 0 0 1px var(--danger-line);
   cursor: pointer;
   font-family: Geist, "Inter", sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
+  line-height: 1.3;
   letter-spacing: -0.01em;
   opacity: 0;
   overflow: hidden;
   transform: translateY(8px) scale(0.98);
-  outline: none;
   transition:
-    opacity 320ms var(--ease-out),
-    transform 320ms var(--ease-out),
-    background var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out);
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
 }
 
 .call-end-glyph {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--danger);
-}
-
-.call-end:hover:not(:disabled),
-.call-end:focus-visible:not(:disabled) {
-  background: rgba(255, 82, 82, 0.28);
-  box-shadow: inset 0 0 0 1px var(--danger);
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: currentColor;
 }
 
 .call-end:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 /* Active-call layout */
@@ -1889,43 +1855,6 @@ button {
   display: contents;
 }
 
-.cu-card[hidden] {
-  display: none;
-}
-
-.cu-head {
-  display: none;
-}
-
-.cu-icon {
-  width: 16px;
-  height: 12px;
-  border: 1.5px solid var(--accent);
-  border-radius: var(--radius-xs);
-  box-shadow: 0 0 10px rgba(0, 136, 255, 0.35);
-}
-
-.cu-title {
-  flex: 1;
-  color: var(--text);
-  font-family: Geist, "Inter", sans-serif;
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.cu-target {
-  padding: 3px 10px;
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius-pill);
-  color: var(--accent-bright);
-  background: var(--accent-soft);
-  font-size: 0.54rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
 .cu-status-row {
   display: flex;
   align-items: center;
@@ -1951,33 +1880,9 @@ button {
   font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: -0.01em;
-  line-height: 20px;
+  line-height: 1.3;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.cu-track {
-  display: none;
-}
-
-.cu-track-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 40%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  animation: cu-track-slide 1.6s var(--ease-out) infinite;
-}
-
-@keyframes cu-track-slide {
-  0% {
-    transform: translateX(-120%);
-  }
-  100% {
-    transform: translateX(320%);
-  }
 }
 
 .tool-activity-stop {
@@ -1990,23 +1895,13 @@ button {
   padding: 0 12px;
   border: 0;
   border-radius: var(--radius-pill);
-  color: var(--danger);
-  background: var(--danger-soft);
-  box-shadow: inset 0 0 0 1px var(--danger-line);
   font-family: Geist, "Inter", sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
+  line-height: 1.3;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition:
-    background var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out);
-}
-
-.tool-activity-stop:hover:not(:disabled),
-.tool-activity-stop:focus-visible:not(:disabled) {
-  background: rgba(255, 82, 82, 0.28);
-  box-shadow: inset 0 0 0 1px var(--danger);
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 
 .tool-activity-stop:disabled {
@@ -2066,4 +1961,62 @@ button {
 
 .app-shell[data-panel="open"]:not([data-call="active"]) .status {
   display: none;
+}
+
+/* ---------- Reduced motion ----------
+   Movement becomes a plain fade; nothing loops. Colour and opacity feedback
+   stays, so every state change is still visible. */
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .panel-selection-bar,
+  .call-end,
+  .call-wave,
+  .call-meta,
+  .panel-tabs::before,
+  .menu-glyph,
+  .menu-glyph::before,
+  .menu-glyph::after,
+  .header-call-icon,
+  .view-back svg {
+    transition-property: opacity, color, background-color, border-color;
+  }
+
+  .panel,
+  .panel-selection-bar,
+  .call-end,
+  .call-wave,
+  .call-meta {
+    transform: none;
+  }
+
+  .panel-body > *,
+  .screenshot-grid > *,
+  .permission-item,
+  .permissions-panel,
+  .agent-panel,
+  .settings-panel,
+  .app-menu,
+  .panel-empty,
+  .screenshot-card.is-selected::after {
+    animation-name: fade-in;
+  }
+
+  .panel-empty::before,
+  .call-live {
+    animation: none;
+  }
+
+  .header-call:active:not(:disabled),
+  .selection-action:active,
+  .agent-save:active,
+  .call-end:active:not(:disabled),
+  .fab-orb:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
 }

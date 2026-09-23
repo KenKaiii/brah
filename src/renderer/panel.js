@@ -22,6 +22,16 @@ const statusLabels = Object.freeze({
   completed: "Completed",
 });
 
+// Readable labels for computer-use run results (raw values come from the tool).
+const computerRunStatusLabels = Object.freeze({
+  completed: "Done",
+  error: "Failed",
+  max_steps: "Step limit",
+  cancelled: "Stopped",
+  permission_required: "Needs permission",
+  invalid_arguments: "Invalid request",
+});
+
 export function createPanelController({ brah, onModeChange } = {}) {
   const bridge = brah ?? window.brah;
   const panelElement = document.querySelector("#panel");
@@ -45,6 +55,17 @@ export function createPanelController({ brah, onModeChange } = {}) {
   const selectableTabs = Object.freeze(new Set(["tasks", "calendar", "screenshots", "memory"]));
 
   function renderTabs() {
+    // Drives the sliding thumb in styles.css (.panel-tabs::before).
+    tabsElement.style.setProperty("--tab-count", String(tabs.length));
+    tabsElement.style.setProperty(
+      "--tab-index",
+      String(
+        Math.max(
+          0,
+          tabs.findIndex((tab) => tab.id === activeTabId),
+        ),
+      ),
+    );
     tabsElement.replaceChildren(
       ...tabs.map((tab) => {
         const button = document.createElement("button");
@@ -140,7 +161,10 @@ export function createPanelController({ brah, onModeChange } = {}) {
   }
 
   function setLoading() {
-    mountBody(buildEmptyState("Loading…", ""));
+    const loading = buildEmptyState("Loading…", "");
+    loading.classList.add("is-loading");
+    loading.setAttribute("role", "status");
+    mountBody(loading);
     setFooter("");
   }
 
@@ -566,7 +590,7 @@ export function createPanelController({ brah, onModeChange } = {}) {
     title.textContent = run.task || "Computer task";
     const badge = document.createElement("span");
     badge.className = `status-badge status-${run.statusText || "unknown"}`;
-    badge.textContent = run.statusText || "unknown";
+    badge.textContent = computerRunStatusLabels[run.statusText] || run.statusText || "Unknown";
     header.append(title, badge);
     row.append(header);
     if (run.finalText) {
