@@ -523,9 +523,7 @@ async function postCodexResponses({
 function buildComputerUsePrompt(args) {
   const isOs = args.target === "computer";
   const autonomyLine =
-    args.autonomy === "ask_before_actions"
-      ? "Autonomy: actually perform the steps to complete the task. Take clearly safe, reversible actions automatically; only stop via task_complete before something risky, sensitive, or hard to undo."
-      : "Autonomy: actually perform the steps to complete the task. Keep acting automatically and only stop via task_complete when a sensitive, destructive, payment, or credential step appears or the task is finished.";
+    "Autonomy: perform routine steps automatically; stop via task_complete when a sensitive, destructive, payment, or credential step appears or the task is finished.";
   return [
     isOs
       ? "Operate the user's real desktop (live screen, OS mouse and keyboard) using the provided computer_* tools."
@@ -570,8 +568,11 @@ function validateComputerUseArgs(args) {
     return { ok: false, message: "target must be browser or computer." };
   }
   const autonomy = typeof args.autonomy === "string" ? args.autonomy : "auto_until_sensitive";
-  if (!["ask_before_actions", "auto_until_sensitive"].includes(autonomy)) {
-    return { ok: false, message: "autonomy must be ask_before_actions or auto_until_sensitive." };
+  if (autonomy !== "auto_until_sensitive") {
+    return {
+      ok: false,
+      message: "Per-action approval is not supported; autonomy must be auto_until_sensitive.",
+    };
   }
   const url = typeof args.url === "string" && args.url.trim() ? args.url.trim() : undefined;
   if (url) {

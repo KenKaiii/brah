@@ -60,10 +60,58 @@ test("ignores streaming argument-done events in favor of the finalized item", ()
   );
 });
 
-test("invalid tool argument JSON falls back to an empty object", () => {
-  assert.deepEqual(parseToolArguments("not json"), {});
-  assert.deepEqual(parseToolArguments("[]"), {});
-  assert.deepEqual(parseToolArguments(""), {});
+test("malformed arguments are distinguishable from an empty tool argument object", () => {
+  assert.equal(parseToolArguments("not json"), null);
+  assert.equal(parseToolArguments("[]"), null);
+  assert.equal(parseToolArguments(""), null);
+  assert.deepEqual(parseToolArguments("{}"), {});
+});
+
+test("invalid arguments return a tool error instead of executing a default action", async () => {
+  const sentEvents = [];
+  let executions = 0;
+  let hangups = 0;
+  const handler = createRealtimeToolHandler({
+    executeTool: async () => {
+      executions++;
+    },
+    sendEvent: (event) => sentEvents.push(event),
+    setMode: () => {},
+    setStatus: () => {},
+    onEndCall: () => {
+      hangups++;
+    },
+  });
+  for (const [name, args] of [
+    ["take_screenshot", "not json"],
+    ["end_call", "not json"],
+    ["take_screenshot", ""],
+  ]) {
+    await handler.handleEvent({
+      type: "response.output_item.done",
+      item: {
+        type: "function_call",
+        status: "completed",
+        call_id: `${name}-${args}`,
+        name,
+        arguments: args,
+      },
+    });
+  }
+  assert.equal(executions, 0);
+  assert.equal(hangups, 0);
+  assert.deepEqual(
+    sentEvents.map((event) => event.type),
+    [
+      "conversation.item.create",
+      "response.create",
+      "conversation.item.create",
+      "response.create",
+      "conversation.item.create",
+      "response.create",
+    ],
+  );
+  assert.equal(JSON.parse(sentEvents[0].item.output).status, "invalid_arguments");
 });
 
 test("tool handler executes calls once per call id and sends Realtime output events", async () => {
@@ -109,6 +157,38 @@ test("tool handler executes calls once per call id and sends Realtime output eve
     },
     { type: "response.create" },
   ]);
+});
+
+test("reset prevents a late tool result from reaching the next call", async () => {
+  let finishTool;
+  const sentEvents = [];
+  const activity = [];
+  const handler = createRealtimeToolHandler({
+    executeTool: () =>
+      new Promise((resolve) => {
+        finishTool = resolve;
+      }),
+    sendEvent: (event) => sentEvents.push(event),
+    setMode: () => {},
+    setStatus: () => {},
+    onToolStart: () => activity.push("started"),
+    onToolEnd: () => activity.push("ended"),
+  });
+  const pending = handler.handleEvent({
+    type: "response.output_item.done",
+    item: {
+      type: "function_call",
+      status: "completed",
+      call_id: "old-call",
+      name: "web_fetch",
+      arguments: "{}",
+    },
+  });
+  handler.reset();
+  finishTool({ status: "ok" });
+  assert.equal(await pending, true);
+  assert.deepEqual(sentEvents, []);
+  assert.deepEqual(activity, ["started"]);
 });
 
 test("tool handler signals activity start/end around execution", async () => {

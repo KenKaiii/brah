@@ -19,13 +19,13 @@ export function getRealtimeToolCall(event) {
 
 export function parseToolArguments(rawArguments) {
   if (typeof rawArguments !== "string" || !rawArguments.trim()) {
-    return {};
+    return null;
   }
   try {
     const parsed = JSON.parse(rawArguments);
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : {};
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -39,9 +39,11 @@ export function createRealtimeToolHandler({
   onToolEnd,
 }) {
   const handledToolCallIds = new Set();
+  let generation = 0;
 
   return {
     reset() {
+      ++generation;
       handledToolCallIds.clear();
     },
     async handleEvent(event) {
@@ -53,6 +55,13 @@ export function createRealtimeToolHandler({
         return true;
       }
       handledToolCallIds.add(toolCall.callId);
+      if (toolCall.arguments === null) {
+        sendRealtimeToolOutput(sendEvent, toolCall.callId, {
+          status: "invalid_arguments",
+          message: "Tool arguments must be a valid JSON object. Retry with valid arguments.",
+        });
+        return true;
+      }
       setStatus(formatToolStatus(toolCall.name));
       setMode("thinking");
 
@@ -70,13 +79,16 @@ export function createRealtimeToolHandler({
         return true;
       }
 
+      const activeGeneration = generation;
       onToolStart?.(toolCall.name);
       let result;
       try {
         result = await executeToolSafely(executeTool, toolCall.name, toolCall.arguments);
       } finally {
-        onToolEnd?.(toolCall.name, result);
+        if (activeGeneration === generation) onToolEnd?.(toolCall.name, result);
       }
+      // A tool may finish after hang-up; its output must never reach a new call.
+      if (activeGeneration !== generation) return true;
       if (isRecord(result?.realtimeInput)) {
         sendRealtimeToolOutput(sendEvent, toolCall.callId, createRealtimeImageToolOutput(result), {
           createResponse: false,

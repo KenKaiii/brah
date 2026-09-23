@@ -57,6 +57,21 @@ test("buildComputerTools exposes action tools plus task_complete; navigate only 
   }
 });
 
+test("per-action approval is rejected before any computer session starts", async () => {
+  let started = false;
+  const result = await runComputerUseTask(
+    { task: "Click the button", autonomy: "ask_before_actions" },
+    {
+      computerTargetFactory: async () => {
+        started = true;
+      },
+    },
+  );
+  assert.equal(result.status, "invalid_arguments");
+  assert.match(result.message, /Per-action approval is not supported/);
+  assert.equal(started, false);
+});
+
 test("runComputerUseTask drives a Codex custom-tool loop and completes", async () => {
   const requests = [];
   const actions = [];

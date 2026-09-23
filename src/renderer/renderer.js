@@ -8,6 +8,7 @@ import {
 } from "../realtime/prompts.js";
 import { initClickSound } from "./click-sound.js";
 import { createPanelController } from "./panel.js";
+import { acquireCallResources } from "./realtime-call-resources.js";
 import { createRealtimePlaybackTracker, isBenignCancelError } from "./realtime-playback.js";
 import {
   createRealtimeResponseCoordinator,
@@ -90,6 +91,11 @@ let openAIStatus = null;
 let peerConnection = null;
 let dataChannel = null;
 let localStream = null;
+let callGeneration = 0;
+let callStarting = false;
+let callStopping = false;
+let callOfferController = null;
+let callActivationPromise = null;
 // Ephemeral realtime secrets are short-lived; we prefetch one as soon as OpenAI
 // connects (and re-prime after each call) so call-start never blocks on the
 // client_secret round-trip. The cache holds the last resolved secret, while
@@ -97,6 +103,7 @@ let localStream = null;
 // share it instead of minting duplicates.
 let prefetchedSecret = null;
 let secretPrefetchPromise = null;
+let secretPrefetchGeneration = 0;
 // Timestamp of the last background prefetch failure; used to back off automatic
 // re-prime attempts so a failing endpoint isn't hammered by repeated triggers.
 let lastSecretPrefetchFailureAt = 0;
@@ -913,7 +920,7 @@ function realtimeCallFailureHint(status) {
 }
 
 async function toggleCall() {
-  if (peerConnection) {
+  if (isCallActive || callStarting || peerConnection) {
     await stopCall();
     return;
   }
@@ -948,9 +955,11 @@ function prefetchRealtimeSecret() {
     return;
   }
   const startedAt = performance.now();
-  secretPrefetchPromise = window.brah
+  const generation = secretPrefetchGeneration;
+  const request = window.brah
     .createRealtimeSecret()
     .then((secret) => {
+      if (generation !== secretPrefetchGeneration) return null;
       prefetchedSecret = secret;
       lastSecretPrefetchFailureAt = 0;
       void writeRendererDiagnostic("call.secret.prefetched", {
@@ -962,14 +971,16 @@ function prefetchRealtimeSecret() {
     .catch((error) => {
       // A prefetch failure is non-fatal: `consumeRealtimeSecret` falls back to an
       // on-demand fetch, surfacing any real error there.
+      if (generation !== secretPrefetchGeneration) return null;
       prefetchedSecret = null;
       lastSecretPrefetchFailureAt = Date.now();
       void writeRendererDiagnostic("call.secret.prefetch_failed", formatRendererError(error));
       return null;
     })
     .finally(() => {
-      secretPrefetchPromise = null;
+      if (secretPrefetchPromise === request) secretPrefetchPromise = null;
     });
+  secretPrefetchPromise = request;
 }
 
 // Return a fresh secret for a call, preferring the prefetched one, then any
@@ -1008,25 +1019,28 @@ async function consumeRealtimeSecret() {
 // Drop any cached secret when it can no longer be valid (sign-out) or when the
 // agent profile that shaped it changed (voice/instructions are baked in).
 function invalidatePrefetchedSecret() {
+  ++secretPrefetchGeneration;
   prefetchedSecret = null;
+  secretPrefetchPromise = null;
   // Clear the failure cooldown too, so an explicit invalidation (sign-out,
   // profile change) can re-prime immediately rather than waiting it out.
   lastSecretPrefetchFailureAt = 0;
 }
 
 async function startCall() {
-  if (!isOpenAIConnected) {
-    setStatus("Connect first");
+  if (!isOpenAIConnected || callStarting || callStopping) {
     return;
   }
 
+  const generation = ++callGeneration;
+  callStarting = true;
   callToggleButton.disabled = true;
   headerCallButton.disabled = true;
   resetTranscriptBuffer();
   // Close the panel inside the layout swap's hidden phase (not before it), so the
   // large idle orb never flashes at panel size between the panel hiding and the
   // call pill appearing. The panel fades out, then the call pill fades in.
-  void setCallActive(true, {
+  callActivationPromise = setCallActive(true, {
     onHidden: async () => {
       if (panelController.isOpen()) {
         await panelController.close({ immediate: true, skipWindowMode: true });
@@ -1035,7 +1049,7 @@ async function startCall() {
   });
   setStatus("Starting…");
   setMode("connecting");
-  await writeRendererDiagnostic("call.start", {
+  void writeRendererDiagnostic("call.start", {
     mediaDevicesAvailable: Boolean(navigator.mediaDevices?.getUserMedia),
   });
 
@@ -1044,164 +1058,209 @@ async function startCall() {
     // independent, so run them concurrently to overlap their round-trips. The
     // secret is usually already prefetched, making this effectively just the
     // getUserMedia wait.
-    const [secret, stream] = await Promise.all([
-      consumeRealtimeSecret(),
-      acquireMicrophoneStream(),
-    ]);
+    const { secret, stream } = await acquireCallResources(
+      consumeRealtimeSecret,
+      acquireMicrophoneStream,
+    );
+    if (generation !== callGeneration) {
+      for (const track of stream.getTracks()) track.stop();
+      return;
+    }
     localStream = stream;
     showCallModelPending(secret?.model);
-    await writeRendererDiagnostic("call.secret.created", {
+    void writeRendererDiagnostic("call.secret.created", {
       hasValue: Boolean(secret?.value),
       model: secret?.model,
       authMethod: secret?.authMethod,
     });
-    await writeRendererDiagnostic("call.microphone.stream", describeMediaStream(localStream));
+    void writeRendererDiagnostic("call.microphone.stream", describeMediaStream(localStream));
     startAudioLevelMonitor(localStream);
     void populateMicDevices();
 
-    peerConnection = new RTCPeerConnection();
-    dataChannel = peerConnection.createDataChannel("oai-events");
-    await writeRendererDiagnostic("call.peer.created", {});
+    const pc = new RTCPeerConnection();
+    peerConnection = pc;
+    const channel = pc.createDataChannel("oai-events");
+    dataChannel = channel;
+    void writeRendererDiagnostic("call.peer.created", {});
 
-    peerConnection.ontrack = (event) => {
+    pc.ontrack = (event) => {
+      if (generation !== callGeneration) return;
       const [stream] = event.streams;
       remoteAudioElement.srcObject = stream;
       audioLevelMonitor?.setRemoteStream(stream);
     };
-    peerConnection.onconnectionstatechange = () => {
-      if (!peerConnection) {
-        return;
-      }
+    pc.onconnectionstatechange = () => {
+      if (generation !== callGeneration) return;
       void writeRendererDiagnostic("call.connection_state", {
-        state: peerConnection.connectionState,
+        state: pc.connectionState,
       });
-      setStatus(formatConnectionState(peerConnection.connectionState));
-      if (peerConnection.connectionState === "connected") {
+      setStatus(formatConnectionState(pc.connectionState));
+      if (pc.connectionState === "connected") {
         setMode("listening");
       }
-      if (["closed", "disconnected", "failed"].includes(peerConnection.connectionState)) {
+      if (["closed", "disconnected", "failed"].includes(pc.connectionState)) {
         void stopCall();
       }
     };
-    dataChannel.addEventListener("open", () => {
+    channel.addEventListener("open", () => {
+      if (generation !== callGeneration) return;
       void writeRendererDiagnostic("call.data_channel.open", {});
       setStatus("Listening");
       setMode("listening");
       sendRealtimeWelcome();
     });
-    dataChannel.addEventListener("message", (event) => {
-      const realtimeEvent = JSON.parse(event.data);
+    channel.addEventListener("message", (event) => {
+      if (generation !== callGeneration) return;
+      let realtimeEvent;
+      try {
+        realtimeEvent = JSON.parse(event.data);
+      } catch {
+        void writeRendererDiagnostic("realtime.event.invalid_json", {});
+        return;
+      }
       // Skip high-frequency streaming deltas so the diagnostic log stays a
       // readable, copy-pasteable record of meaningful events.
       if (!isNoisyRealtimeEvent(realtimeEvent?.type)) {
         void writeRendererDiagnostic("realtime.event", summarizeRealtimeEvent(realtimeEvent));
       }
-      void handleRealtimeEvent(realtimeEvent);
+      void handleRealtimeEvent(realtimeEvent, generation);
     });
 
     for (const track of localStream.getTracks()) {
-      peerConnection.addTrack(track, localStream);
+      pc.addTrack(track, localStream);
     }
-    await writeRendererDiagnostic("call.microphone.tracks_added", describeMediaStream(localStream));
+    void writeRendererDiagnostic("call.microphone.tracks_added", describeMediaStream(localStream));
 
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
+    const offer = await pc.createOffer();
+    if (generation !== callGeneration) return;
+    await pc.setLocalDescription(offer);
+    if (generation !== callGeneration) return;
 
+    const offerController = new AbortController();
+    callOfferController = offerController;
     const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
       method: "POST",
       body: offer.sdp,
+      signal: AbortSignal.any([offerController.signal, AbortSignal.timeout(20_000)]),
       headers: {
         Authorization: `Bearer ${secret.value}`,
         "Content-Type": "application/sdp",
       },
     });
 
+    if (generation !== callGeneration) return;
     if (!sdpResponse.ok) {
       throw new Error(await describeRealtimeCallFailure(sdpResponse));
     }
 
-    await peerConnection.setRemoteDescription({
-      type: "answer",
-      sdp: await sdpResponse.text(),
-    });
-    await writeRendererDiagnostic("call.remote_description.set", {
-      connectionState: peerConnection.connectionState,
+    const answerSdp = await sdpResponse.text();
+    if (generation !== callGeneration) return;
+    await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+    void writeRendererDiagnostic("call.remote_description.set", {
+      connectionState: pc.connectionState,
     });
 
-    setStatus("Connecting");
+    if (generation === callGeneration && pc.connectionState !== "connected") {
+      setStatus("Connecting");
+    }
   } catch (error) {
-    await writeRendererDiagnostic("call.error", formatRendererError(error));
-    setStatus(`Failed: ${error.message}`);
-    await stopCall();
+    if (generation === callGeneration) {
+      void writeRendererDiagnostic("call.error", formatRendererError(error));
+      setStatus(`Failed: ${error.message}`);
+      await stopCall();
+    }
   } finally {
+    if (generation === callGeneration) callOfferController = null;
+    callStarting = false;
     callToggleButton.disabled = !isOpenAIConnected;
     headerCallButton.disabled = !isOpenAIConnected;
   }
 }
 
 async function stopCall() {
-  audioLevelMonitor?.stop();
-  audioLevelMonitor = null;
-  setOrbLevel(0);
+  if (callStopping) return;
+  callStopping = true;
+  try {
+    ++callGeneration;
+    callOfferController?.abort();
+    callOfferController = null;
+    audioLevelMonitor?.stop();
+    audioLevelMonitor = null;
+    setOrbLevel(0);
 
-  if (dataChannel) {
-    dataChannel.close();
-    dataChannel = null;
-  }
-
-  if (peerConnection) {
-    peerConnection.close();
-    peerConnection = null;
-  }
-
-  if (localStream) {
-    for (const track of localStream.getTracks()) {
-      track.stop();
+    if (dataChannel) {
+      dataChannel.close();
+      dataChannel = null;
     }
-    localStream = null;
-  }
 
-  if (hangupFallbackTimer) {
-    clearTimeout(hangupFallbackTimer);
-    hangupFallbackTimer = null;
-  }
-  pendingHangup = false;
-  if (welcomeMicGuardTimer !== null) {
-    clearTimeout(welcomeMicGuardTimer);
-    welcomeMicGuardTimer = null;
-  }
-  // Persist the final turn before teardown (the extractor writes to disk
-  // regardless of call state), then clear the buffer for the next call.
-  void runMemoryExtraction();
-  resetTranscriptBuffer();
-  clearCallToasts();
-  playbackTracker.reset();
-  responseCoordinator.reset();
-  waitingSound.reset();
+    if (peerConnection) {
+      peerConnection.close();
+      peerConnection = null;
+    }
 
-  realtimeToolHandler.reset();
-  hideToolActivity();
-  hideCallModelBadge();
-  remoteAudioElement.srcObject = null;
-  // Open the panel inside the swap's hidden phase so the call pill fades out
-  // straight into the panel — the large idle orb never flashes at panel size.
-  await setCallActive(false, {
-    inactiveWindowMode: "panel",
-    onHidden: async () => {
-      await panelController.open({ skipWindowMode: true });
-    },
-  });
-  // Defensive: if the call was already inactive (e.g. a second stopCall from the
-  // connection-state handler), setCallActive no-ops and its onHidden never runs.
-  // open() is idempotent, so this guarantees the panel is shown either way.
-  await panelController.open();
-  setMode("idle");
-  setStatus(isOpenAIConnected ? "Ready" : "Connect OpenAI");
-  // Re-prime a secret so the next call starts without the client_secret wait.
-  prefetchRealtimeSecret();
+    if (localStream) {
+      for (const track of localStream.getTracks()) {
+        track.stop();
+      }
+      localStream = null;
+    }
+
+    if (hangupFallbackTimer) {
+      clearTimeout(hangupFallbackTimer);
+      hangupFallbackTimer = null;
+    }
+    pendingHangup = false;
+    if (welcomeMicGuardTimer !== null) {
+      clearTimeout(welcomeMicGuardTimer);
+      welcomeMicGuardTimer = null;
+    }
+    // Persist the final turn before teardown (the extractor writes to disk
+    // regardless of call state), then clear the buffer for the next call.
+    void runMemoryExtraction();
+    resetTranscriptBuffer();
+    clearCallToasts();
+    playbackTracker.reset();
+    responseCoordinator.reset();
+    waitingSound.reset();
+
+    // A computer-use task can outlive its WebRTC tool reply. Ending the call
+    // must also stop the underlying task, not only discard its late output.
+    if (appShellElement.dataset.toolActivity === "active") {
+      void stopComputerUse();
+    }
+    realtimeToolHandler.reset();
+    hideToolActivity();
+    hideCallModelBadge();
+    remoteAudioElement.srcObject = null;
+    // A hang-up during setup must not let the earlier async layout transition
+    // resize the window back to call mode after teardown has finished.
+    try {
+      await callActivationPromise;
+    } finally {
+      callActivationPromise = null;
+    }
+    // Open the panel inside the swap's hidden phase so the call pill fades out
+    // straight into the panel — the large idle orb never flashes at panel size.
+    await setCallActive(false, {
+      inactiveWindowMode: "panel",
+      onHidden: async () => {
+        await panelController.open({ skipWindowMode: true });
+      },
+    });
+    // Defensive: if the call was already inactive (e.g. a second stopCall from the
+    // connection-state handler), setCallActive no-ops and its onHidden never runs.
+    // open() is idempotent, so this guarantees the panel is shown either way.
+    await panelController.open();
+    setMode("idle");
+    setStatus(isOpenAIConnected ? "Ready" : "Connect OpenAI");
+    // Re-prime a secret so the next call starts without the client_secret wait.
+    prefetchRealtimeSecret();
+  } finally {
+    callStopping = false;
+  }
 }
 
-async function handleRealtimeEvent(event) {
+async function handleRealtimeEvent(event, generation) {
   playbackTracker.observe(event);
   // The welcome greeting finished playing through the speakers — safe to listen.
   if (welcomeMicGuardTimer !== null && event.type === "output_audio_buffer.stopped") {
@@ -1216,9 +1275,8 @@ async function handleRealtimeEvent(event) {
     // The active response just ended; release the create we queued earlier.
     sendRealtimeDataChannelEvent(queuedCreate);
   }
-  if (await realtimeToolHandler.handleEvent(event)) {
-    return;
-  }
+  const handledTool = await realtimeToolHandler.handleEvent(event);
+  if (generation !== callGeneration || handledTool) return;
   if (event.type === "conversation.item.input_audio_transcription.completed") {
     // The user's transcribed turn just finalized — buffer it and schedule extraction.
     recordTranscriptTurn("user", event.transcript);
@@ -1441,13 +1499,27 @@ async function switchMicrophone() {
     const newStream = await acquireMicrophoneStream();
     const [newTrack] = newStream.getAudioTracks();
     if (!newTrack) {
+      for (const track of newStream.getTracks()) track.stop();
       return;
     }
-    const sender = peerConnection?.getSenders().find((entry) => entry.track?.kind === "audio");
-    if (sender) {
-      await sender.replaceTrack(newTrack);
+    const connection = peerConnection;
+    const previousStream = localStream;
+    const sender = connection?.getSenders().find((entry) => entry.track?.kind === "audio");
+    if (!sender || !previousStream) {
+      for (const track of newStream.getTracks()) track.stop();
+      return;
     }
-    for (const track of localStream.getTracks()) {
+    try {
+      await sender.replaceTrack(newTrack);
+    } catch (error) {
+      for (const track of newStream.getTracks()) track.stop();
+      throw error;
+    }
+    if (connection !== peerConnection) {
+      for (const track of newStream.getTracks()) track.stop();
+      return;
+    }
+    for (const track of previousStream.getTracks()) {
       track.stop();
     }
     localStream = newStream;

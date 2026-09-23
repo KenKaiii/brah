@@ -326,7 +326,9 @@ export const realtimeToolDefinitions = Object.freeze([
         },
         autonomy: {
           type: "string",
-          enum: ["ask_before_actions", "auto_until_sensitive"],
+          description:
+            "Routine steps run automatically; stop before sensitive actions. Per-action approval is not supported.",
+          enum: ["auto_until_sensitive"],
         },
         maxSteps: {
           type: "integer",

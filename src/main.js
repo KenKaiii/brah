@@ -1377,6 +1377,7 @@ async function createRealtimeClientSecret(bearerToken, options) {
   const session = buildRealtimeSessionConfig(options);
   const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
+    signal: AbortSignal.timeout(20_000),
     headers: {
       Authorization: `Bearer ${bearerToken}`,
       "Content-Type": "application/json",
@@ -1397,7 +1398,6 @@ async function createRealtimeClientSecret(bearerToken, options) {
     expiresAt: parseExpiresAt(raw.expires_at),
     model: mintedModel,
     authMethod: options.authMethod ?? "oauth",
-    raw,
   };
 }
 
