@@ -171,7 +171,8 @@ test("routine local task and calendar actions run without extra approval", () =>
   const instructions = buildAgentInstructions({});
   assert.match(
     instructions,
-    /routine local task\/calendar reads, additions, and status updates without asking first/,
+    /routine local task\/calendar reads, additions, and edits without asking first/,
   );
+  assert.match(instructions, /use update_task or update_calendar_item; never delete and re-add/);
   assert.match(instructions, /Only delete when the user clearly asked to delete/);
 });

@@ -549,6 +549,10 @@ ipcMain.handle("tools:execute", async (_event, name, args = {}) => {
   }
   try {
     const credentials = isComputerUse ? await getFreshOpenAICredentials() : null;
+    const webAuth =
+      name === "web_search" || name === "web_fetch"
+        ? await resolveOpenAITextAuth("web.auth.refresh_failed")
+        : null;
     const screenshotOptions = {
       desktopCapturer,
       screen,
@@ -580,6 +584,17 @@ ipcMain.handle("tools:execute", async (_event, name, args = {}) => {
       },
       fileSystem: {
         rootPath: app.getPath("home"),
+      },
+      launcher: {
+        openExternal: (url) => shell.openExternal(url),
+        openPath: (target) => shell.openPath(target),
+        showItemInFolder: (target) => shell.showItemInFolder(target),
+      },
+      web: {
+        auth: webAuth,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        logger: (event, details) =>
+          void writeDiagnosticLog(event, sanitizeDiagnosticValue(details)),
       },
     });
     await writeDiagnosticLog("tool.execute.finish", {
@@ -696,9 +711,11 @@ function categoryForTool(name) {
     case "add_task":
     case "delete_task":
     case "update_task_status":
+    case "update_task":
       return "tasks";
     case "add_calendar_item":
     case "delete_calendar_item":
+    case "update_calendar_item":
       return "calendar";
     case "take_screenshot":
     case "analyze_screen":
@@ -836,27 +853,30 @@ function deleteDailyLogs(ids) {
   return { status: "ok", deleted };
 }
 
-async function runMemoryExtraction(transcript) {
-  // Same precedence as realtime calls: a signed-in subscription wins; the API
-  // key is only a fallback when there is none (or its refresh fails).
+// Same precedence as realtime calls: a signed-in subscription wins; the API key
+// is only a fallback when there is none (or its refresh fails). Used by the
+// background text-model jobs (memory extraction, hosted web search).
+async function resolveOpenAITextAuth(refreshFailedEvent) {
   let credentials = null;
   try {
     credentials = await getFreshOpenAICredentials();
   } catch (error) {
-    void writeDiagnosticLog(
-      "memory.extract.refresh_failed",
-      sanitizeDiagnosticValue({ error: error.message }),
-    );
+    void writeDiagnosticLog(refreshFailedEvent, sanitizeDiagnosticValue({ error: error.message }));
   }
-  const profile = loadAgentProfile();
   const subscription = credentials?.accountId
     ? {
         accessToken: credentials.accessToken,
         accountId: credentials.accountId,
-        model: profile.taskModel,
+        model: loadAgentProfile().taskModel,
       }
     : null;
   const apiKey = subscription ? null : await loadOpenAIApiKey();
+  return { subscription, apiKey };
+}
+
+async function runMemoryExtraction(transcript) {
+  const { subscription, apiKey } = await resolveOpenAITextAuth("memory.extract.refresh_failed");
+  const profile = loadAgentProfile();
   if (!subscription && !apiKey) {
     return { status: "skipped", reason: "no_credentials" };
   }
@@ -1531,6 +1551,45 @@ async function runRealtimeProbe() {
         out.computerUse = {
           status: result?.status,
           finalText: String(result?.finalText ?? result?.message ?? "").slice(0, 200),
+        };
+      }
+      console.log(`BRAH_PROBE ${JSON.stringify(out)}`);
+      app.quit();
+      return;
+    }
+    if (credentials && process.env.BRAH_PROBE_WEB) {
+      // Real web_search / web_fetch tool calls through the subscription.
+      const web = {
+        auth: {
+          subscription: {
+            accessToken: credentials.accessToken,
+            accountId: credentials.accountId,
+            model: process.env.BRAH_PROBE_TASK_MODEL || loadAgentProfile().taskModel,
+          },
+          apiKey: null,
+        },
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        logger: (event, details) =>
+          console.log(`BRAH_PROBE_LOG ${event} ${JSON.stringify(details)}`),
+      };
+      for (const entry of process.env.BRAH_PROBE_WEB.split("|")) {
+        const isUrl = /^https?:\/\//.test(entry);
+        const startedAt = Date.now();
+        const result = await executeRealtimeTool(
+          isUrl ? "web_fetch" : "web_search",
+          isUrl ? { url: entry } : { query: entry },
+          { web },
+        );
+        out[`${isUrl ? "fetch" : "search"}:${entry}`] = {
+          ms: Date.now() - startedAt,
+          status: result.status,
+          provider: result.provider,
+          answer: result.answer?.slice(0, 400),
+          sources: result.sources?.map((source) => source.url),
+          title: result.title,
+          text: result.text?.slice(0, 300),
+          totalLength: result.totalLength ?? result.text?.length,
+          message: result.message?.slice(0, 200),
         };
       }
       console.log(`BRAH_PROBE ${JSON.stringify(out)}`);

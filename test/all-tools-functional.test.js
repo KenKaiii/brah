@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,6 +8,7 @@ import { getRealtimeToolDefinitions } from "../src/realtime/tools/tool-schemas.j
 
 async function withToolHarness(callback) {
   const directory = await mkdtemp(path.join(tmpdir(), "brah-tools-"));
+  const launcherCalls = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
     const parsedUrl = new URL(url);
@@ -50,7 +51,7 @@ async function withToolHarness(callback) {
         body: events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join(""),
       });
     }
-    if (parsedUrl.hostname === "duckduckgo.com") {
+    if (parsedUrl.hostname === "html.duckduckgo.com") {
       return createResponse({
         url,
         body: `
@@ -76,7 +77,20 @@ async function withToolHarness(callback) {
         openAI: { accessToken: "test-token", accountId: "acc-test" },
         computerTargetFactory: async () => createComputerHarness(),
       },
-      fileSystem: { rootPath: directory },
+      fileSystem: { rootPath: directory, platform: "linux" },
+      launcher: {
+        openExternal: async (url) => {
+          launcherCalls.push(["link", url]);
+        },
+        openPath: async (target) => {
+          launcherCalls.push(["path", target]);
+          return "";
+        },
+        showItemInFolder: () => {},
+        platform: "darwin",
+        appDirectories: [path.join(directory, "Apps")],
+      },
+      launcherCalls,
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -202,6 +216,15 @@ test("every registered Realtime tool executes a functional path", async () => {
     assert.equal(result.status, "updated");
     assert.equal(result.item.status, "completed");
 
+    result = await executeRealtimeTool(
+      "update_task",
+      { query: "Ship functional tests", priority: "low" },
+      options,
+    );
+    observedNames.push("update_task");
+    assert.equal(result.status, "updated");
+    assert.equal(result.item.priority, "low");
+
     result = await executeRealtimeTool("delete_task", { query: "Ship functional tests" }, options);
     observedNames.push("delete_task");
     assert.equal(result.status, "deleted");
@@ -224,6 +247,15 @@ test("every registered Realtime tool executes a functional path", async () => {
     observedNames.push("list_calendar_items");
     assert.equal(result.status, "listed");
     assert.equal(result.calendarItems.length, 1);
+
+    result = await executeRealtimeTool(
+      "update_calendar_item",
+      { query: "Tool review", time: "6 PM" },
+      options,
+    );
+    observedNames.push("update_calendar_item");
+    assert.equal(result.status, "updated");
+    assert.equal(result.item.time, "6 PM");
 
     result = await executeRealtimeTool("delete_calendar_item", { query: "Tool review" }, options);
     observedNames.push("delete_calendar_item");
@@ -310,6 +342,26 @@ test("every registered Realtime tool executes a functional path", async () => {
     observedNames.push("edit_file");
     assert.equal(result.status, "edited");
     assert.equal(result.replacements, 1);
+
+    result = await executeRealtimeTool("find_files", { query: "todo" }, options);
+    observedNames.push("find_files");
+    assert.equal(result.status, "found");
+    assert.equal(result.results[0].name, "todo.md");
+
+    result = await executeRealtimeTool("open_file", { path: "notes/todo.md" }, options);
+    observedNames.push("open_file");
+    assert.equal(result.status, "opened");
+
+    result = await executeRealtimeTool("open_link", { url: "example.com" }, options);
+    observedNames.push("open_link");
+    assert.equal(result.status, "opened");
+
+    await mkdir(path.join(options.fileSystem.rootPath, "Apps", "Notes.app"), { recursive: true });
+    result = await executeRealtimeTool("open_app", { name: "notes" }, options);
+    observedNames.push("open_app");
+    assert.equal(result.status, "opened");
+    assert.equal(result.app, "Notes");
+    assert.equal(options.launcherCalls.length, 3);
 
     result = await executeRealtimeTool(
       "computer_use_task",

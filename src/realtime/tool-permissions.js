@@ -19,6 +19,16 @@ const toolPermissionMetadata = Object.freeze({
     label: "Update task",
     description: "Change a task status in your local Tasks list.",
   },
+  update_task: {
+    level: "write",
+    label: "Edit task",
+    description: "Rename or change a task in your local Tasks list.",
+  },
+  update_calendar_item: {
+    level: "write",
+    label: "Edit calendar item",
+    description: "Reschedule or rename an item in your local Calendar list.",
+  },
   add_calendar_item: {
     level: "write",
     label: "Add calendar item",
@@ -37,7 +47,7 @@ const toolPermissionMetadata = Object.freeze({
   web_search: {
     level: "network",
     label: "Search web",
-    description: "Send a search query to DuckDuckGo.",
+    description: "Send a search query to OpenAI web search (DuckDuckGo as a fallback).",
   },
   web_fetch: {
     level: "network",
@@ -58,6 +68,26 @@ const toolPermissionMetadata = Object.freeze({
     level: "write",
     label: "Edit file",
     description: "Replace text inside a file in your local workspace.",
+  },
+  find_files: {
+    level: "read",
+    label: "Find files",
+    description: "Search file and folder names (optionally contents) in your home folder.",
+  },
+  open_file: {
+    level: "low",
+    label: "Open file",
+    description: "Open a file or folder in its default app, or show it in the file browser.",
+  },
+  open_link: {
+    level: "low",
+    label: "Open link",
+    description: "Open a web link in your default browser.",
+  },
+  open_app: {
+    level: "low",
+    label: "Open app",
+    description: "Launch an installed app.",
   },
   list_screenshot_sources: {
     level: "screen",
@@ -138,6 +168,18 @@ function summarizeToolRequest(name, args) {
       return summarizeFields(args, ["title", "date", "time"]);
     case "delete_calendar_item":
       return summarizeFields(args, ["query"]);
+    case "update_task":
+      return summarizeFields(args, ["query", "name", "priority", "status"]);
+    case "update_calendar_item":
+      return summarizeFields(args, ["query", "title", "date", "time"]);
+    case "find_files":
+      return summarizeFields(args, ["query", "folder", "extension", "modifiedWithinDays"]);
+    case "open_file":
+      return summarizeFields(args, ["path", "reveal"]);
+    case "open_link":
+      return summarizeFields(args, ["url"]);
+    case "open_app":
+      return summarizeFields(args, ["name"]);
     case "web_search":
       return summarizeFields(args, ["query"]);
     case "web_fetch":

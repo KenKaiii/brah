@@ -37,7 +37,7 @@ test("getToolPermissionRequest classifies every active tool with a summary", () 
     toolName: "web_search",
     label: "Search web",
     level: "network",
-    description: "Send a search query to DuckDuckGo.",
+    description: "Send a search query to OpenAI web search (DuckDuckGo as a fallback).",
     summary: "query: weather",
   });
 });

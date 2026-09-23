@@ -82,6 +82,48 @@ export const realtimeToolDefinitions = Object.freeze([
   },
   {
     type: "function",
+    name: "update_task",
+    description:
+      "Edit an existing local task in place: rename it, reword its description, or change its priority or status. Only pass the fields that change. Prefer this over deleting and re-adding.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Task id or current title, such as 'task-save-task-history' or 'Save task history'.",
+          minLength: 1,
+          maxLength: 80,
+        },
+        name: {
+          type: "string",
+          description: "New task title, 2-5 words.",
+          minLength: 1,
+          maxLength: 60,
+        },
+        description: {
+          type: "string",
+          description: "New one-sentence description, about 6-12 words.",
+          minLength: 1,
+          maxLength: 120,
+        },
+        priority: {
+          type: "string",
+          description: "New priority.",
+          enum: taskPriorityValues,
+        },
+        status: {
+          type: "string",
+          description: "New status.",
+          enum: taskStatusValues,
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
     name: "add_calendar_item",
     description:
       "Add one short item to the local Calendar list when the user asks to schedule, block, or remember an event.",
@@ -135,21 +177,67 @@ export const realtimeToolDefinitions = Object.freeze([
   },
   {
     type: "function",
-    name: "web_search",
+    name: "update_calendar_item",
     description:
-      "Search the public web for current information and return concise result summaries.",
+      "Edit an existing local calendar item in place, e.g. move it to another date or time, or rename it. Only pass the fields that change. Prefer this over deleting and re-adding.",
     parameters: {
       type: "object",
       properties: {
         query: {
           type: "string",
-          description: "Public web search query.",
+          description:
+            "Calendar item id or current title, such as 'calendar-product-review' or 'Product review'.",
           minLength: 1,
-          maxLength: 240,
+          maxLength: 80,
+        },
+        title: {
+          type: "string",
+          description: "New title, 2-4 words.",
+          minLength: 1,
+          maxLength: 48,
+        },
+        description: {
+          type: "string",
+          description: "New one-sentence description, about 7-12 words.",
+          minLength: 1,
+          maxLength: 120,
+        },
+        date: {
+          type: "string",
+          description: "New short date label, such as 'Tomorrow' or 'Jun 12'.",
+          minLength: 1,
+          maxLength: 24,
+        },
+        time: {
+          type: "string",
+          description: "New short time label, such as '10:00 AM'.",
+          minLength: 1,
+          maxLength: 24,
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "web_search",
+    description:
+      "Look up current or factual information on the public web (news, prices, weather, scores, releases, opening hours, people, docs). Usually returns `answer`, a short sourced summary ready to relay, plus `sources`. If it returns only `results` snippets, call web_fetch on the best URL before answering. Takes a few seconds.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "A specific, self-contained question or search, written out in full. Resolve pronouns and context from the conversation and include names, places, and dates, e.g. 'Weather forecast for Austin, Texas tomorrow' rather than 'weather there'.",
+          minLength: 1,
+          maxLength: 500,
         },
         maxResults: {
           type: "integer",
-          description: "Maximum number of search results to return, default 5 and cap 10.",
+          description:
+            "Maximum snippet results when the fallback search engine is used, default 5 and cap 10.",
           minimum: 1,
           maximum: 10,
         },
@@ -162,13 +250,14 @@ export const realtimeToolDefinitions = Object.freeze([
     type: "function",
     name: "web_fetch",
     description:
-      "Fetch and read a public HTTP or HTTPS page, stripping scripts, styles, and markup.",
+      "Read a specific public web page as clean text: the main content with headings and lists, no menus or scripts. Use when the user gives a URL or you need details from a search result. Pages that block bots or need JavaScript are read through OpenAI browsing automatically. When `truncated` is true, call again with `startIndex` set to `nextStartIndex` to keep reading.",
     parameters: {
       type: "object",
       properties: {
         url: {
           type: "string",
-          description: "Public http:// or https:// URL to fetch.",
+          description:
+            "Full public URL to read. Copy it exactly from a search result or the user; https:// is assumed if missing.",
           minLength: 1,
           maxLength: 2048,
         },
@@ -177,6 +266,12 @@ export const realtimeToolDefinitions = Object.freeze([
           description: "Maximum text characters to return, default 8000 and cap 20000.",
           minimum: 500,
           maximum: 20000,
+        },
+        startIndex: {
+          type: "integer",
+          description:
+            "Character offset to continue reading from; use `nextStartIndex` from the previous web_fetch result. Default 0.",
+          minimum: 0,
         },
       },
       required: ["url"],
@@ -265,6 +360,120 @@ export const realtimeToolDefinitions = Object.freeze([
         },
       },
       required: ["path", "oldText", "newText"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "find_files",
+    description:
+      "Find files or folders on this computer by name words, file type, or how recently they changed, e.g. 'the budget spreadsheet', 'PDFs I downloaded this week'. Returns full paths, best match first, to use with read_file or open_file. Searches the home folder unless a folder is given.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Words from the file or folder name, like 'budget 2026' (all words must match, any order). Wildcards like '*.pdf' also work. Leave out to match by type or date only.",
+          maxLength: 200,
+        },
+        folder: {
+          type: "string",
+          description:
+            "Folder to search, like '~/Downloads', '~/Documents', or '~/Desktop'. Default: the whole home folder.",
+          maxLength: 1024,
+        },
+        extension: {
+          type: "string",
+          description: "Only this file type, like 'pdf', 'docx', 'png'.",
+          maxLength: 12,
+        },
+        modifiedWithinDays: {
+          type: "integer",
+          description: "Only items changed within this many days, e.g. 7 for 'this week'.",
+          minimum: 1,
+          maximum: 3650,
+        },
+        kind: {
+          type: "string",
+          description: "Match files, folders, or either. Default any.",
+          enum: ["any", "file", "folder"],
+        },
+        searchContents: {
+          type: "boolean",
+          description:
+            "Also match the query words inside documents, not just names (macOS). Use when the user describes what's in the file.",
+        },
+        maxResults: {
+          type: "integer",
+          description: "Maximum results, default 15 and cap 50.",
+          minimum: 1,
+          maximum: 50,
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "open_file",
+    description:
+      "Open a file or folder for the user in its default app (a PDF in Preview, a folder in Finder), or with reveal true, highlight it in the file browser. Use a path from find_files. Apps, scripts, and installers are refused.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Path from find_files, like '~/Downloads/report.pdf'.",
+          minLength: 1,
+          maxLength: 1024,
+        },
+        reveal: {
+          type: "boolean",
+          description: "Show the item selected in Finder/Explorer instead of opening it.",
+        },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "open_link",
+    description:
+      "Open a web page (or mailto:/tel: link) in the user's default browser or app, e.g. 'open YouTube', 'pull up that article'. Much faster than computer_use_task; use this whenever the user just wants something opened.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: {
+          type: "string",
+          description:
+            "Full link like 'https://youtube.com'. For a well-known site, use its main address; for a search result, copy the URL exactly.",
+          minLength: 1,
+          maxLength: 2048,
+        },
+      },
+      required: ["url"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "open_app",
+    description:
+      "Launch or bring forward an installed app by name, e.g. 'Spotify', 'Notes', 'Chrome'. Much faster than computer_use_task. If it reports several matches, ask which one.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "App name as the user said it, like 'Spotify' or 'System Settings'.",
+          minLength: 1,
+          maxLength: 80,
+        },
+      },
+      required: ["name"],
       additionalProperties: false,
     },
   },

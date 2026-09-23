@@ -1,7 +1,8 @@
 import { constants as fsConstants } from "node:fs";
-import { access, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { findFilesTool } from "./file-search.js";
+import { resolveSandboxPath } from "./sandbox-path.js";
 
 const DEFAULT_MAX_READ_BYTES = 60_000;
 const MAX_READ_BYTES = 200_000;
@@ -15,7 +16,7 @@ const MAX_WRITE_BYTES = 1_000_000;
  *
  * @param {string} name Tool name.
  * @param {object} args Tool arguments from the model.
- * @param {{ rootPath?: string }} [options] Sandbox configuration.
+ * @param {{ rootPath?: string, platform?: string, execFileImpl?: Function }} [options] Sandbox configuration.
  * @returns {Promise<object|null>} Result for a filesystem tool, or null otherwise.
  */
 export async function executeFileSystemTool(name, args = {}, options = {}) {
@@ -26,6 +27,8 @@ export async function executeFileSystemTool(name, args = {}, options = {}) {
       return writeFileTool(args, options);
     case "edit_file":
       return editFileTool(args, options);
+    case "find_files":
+      return findFilesTool(args, options);
     default:
       return null;
   }
@@ -128,108 +131,6 @@ async function editFileTool(args, options) {
   } catch (error) {
     return fileSystemError(error, args.path);
   }
-}
-
-async function resolveSandboxPath(rawPath, options) {
-  if (typeof rawPath !== "string" || !rawPath.trim()) {
-    return { ok: false, message: "path must be a non-empty string." };
-  }
-  const root = getSandboxRoot(options);
-  const expanded = rawPath.startsWith("~") ? path.join(os.homedir(), rawPath.slice(1)) : rawPath;
-  const absolute = path.resolve(root, expanded);
-  const relative = path.relative(root, absolute);
-  if (relative === "" || relative === ".") {
-    return { ok: false, message: "path must point to a file inside the workspace, not the root." };
-  }
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    return { ok: false, message: "path must stay inside the workspace root." };
-  }
-  // Lexical checks above can be defeated by a symlink inside the workspace that
-  // points outside it, so verify the real (symlink-resolved) location too. New
-  // files may not exist yet, so resolve the nearest existing ancestor.
-  let realRoot;
-  let realTarget;
-  try {
-    realRoot = await resolveRealPath(root);
-    realTarget = await resolveRealPath(absolute);
-  } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : "Failed to resolve path.",
-    };
-  }
-  const realRelative = path.relative(realRoot, realTarget);
-  if (realRelative.startsWith("..") || path.isAbsolute(realRelative)) {
-    return { ok: false, message: "path resolves through a symlink outside the workspace root." };
-  }
-  if (isDeniedRelative(realRelative) || isDeniedRelative(relative)) {
-    return { ok: false, message: "path points to a protected location and is not accessible." };
-  }
-  return { ok: true, value: absolute, relative };
-}
-
-const DENIED_SEGMENTS = new Set([
-  ".ssh",
-  ".aws",
-  ".gnupg",
-  ".gpg",
-  ".docker",
-  ".kube",
-  ".config",
-  ".password-store",
-  "Brah", // ~/Library/Application Support/Brah (app creds + db)
-]);
-const DENIED_BASENAMES = new Set([
-  ".netrc",
-  ".npmrc",
-  ".git-credentials",
-  ".bash_history",
-  ".zsh_history",
-  ".zshrc",
-  ".zprofile",
-  ".zshenv",
-  ".bashrc",
-  ".bash_profile",
-  ".profile",
-  ".env",
-]);
-
-function isDeniedRelative(rel) {
-  const parts = rel.split(path.sep).filter(Boolean);
-  if (parts.some((p) => DENIED_SEGMENTS.has(p))) return true;
-  const base = parts.at(-1);
-  if (base && DENIED_BASENAMES.has(base)) return true;
-  if (base?.endsWith(".pem")) return true;
-  return false;
-}
-
-// Resolves the real path of `target`, following symlinks. When `target` does not
-// exist yet, it resolves the nearest existing ancestor and re-appends the
-// not-yet-created suffix (which cannot itself be a symlink).
-async function resolveRealPath(target) {
-  const missingSegments = [];
-  let current = target;
-  for (;;) {
-    try {
-      const real = await realpath(current);
-      return missingSegments.length > 0 ? path.join(real, ...missingSegments) : real;
-    } catch (error) {
-      if (error?.code !== "ENOENT") {
-        throw error;
-      }
-      const parent = path.dirname(current);
-      if (parent === current) {
-        return target;
-      }
-      missingSegments.unshift(path.basename(current));
-      current = parent;
-    }
-  }
-}
-
-function getSandboxRoot(options) {
-  const candidate = options?.rootPath;
-  return typeof candidate === "string" && candidate.trim() ? path.resolve(candidate) : os.homedir();
 }
 
 function countOccurrences(haystack, needle) {

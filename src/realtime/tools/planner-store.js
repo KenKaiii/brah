@@ -113,6 +113,38 @@ export function updateTaskStatus(query, status, storePath = getPlannerStorePath(
   };
 }
 
+// Applies only the provided fields; the id stays stable so follow-ups keep working.
+export function updateTask(query, changes, storePath = getPlannerStorePath()) {
+  const db = getDatabase(storePath);
+  const match = findPlannerItem(listTasks(storePath), query, (task) => task.name);
+  if (!match) {
+    return { status: "not_found", message: "No matching task was found." };
+  }
+  const updated = normalizeStoredTask({ ...match, ...changes, id: match.id });
+  db.prepare(
+    "UPDATE tasks SET name = ?, description = ?, priority = ?, status = ? WHERE id = ?",
+  ).run(updated.name, updated.description, updated.priority, updated.status, updated.id);
+  return { status: "updated", message: "Task updated.", item: updated, previous: match };
+}
+
+export function updateCalendarItem(query, changes, storePath = getPlannerStorePath()) {
+  const db = getDatabase(storePath);
+  const match = findPlannerItem(listCalendarItems(storePath), query, (item) => item.title);
+  if (!match) {
+    return { status: "not_found", message: "No matching calendar item was found." };
+  }
+  const updated = normalizeStoredCalendarItem({ ...match, ...changes, id: match.id });
+  db.prepare(
+    "UPDATE calendar_items SET title = ?, description = ?, date = ?, time = ? WHERE id = ?",
+  ).run(updated.title, updated.description, updated.date, updated.time, updated.id);
+  return {
+    status: "updated",
+    message: "Calendar item updated.",
+    item: updated,
+    previous: match,
+  };
+}
+
 export function createCalendarItem(input, storePath = getPlannerStorePath()) {
   const db = getDatabase(storePath);
   const existing = db.prepare("SELECT id FROM calendar_items").all();

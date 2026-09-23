@@ -157,11 +157,19 @@ export function formatToolStatus(name) {
     case "list_tasks":
     case "delete_task":
     case "update_task_status":
+    case "update_task":
       return "Using tasks…";
     case "add_calendar_item":
     case "list_calendar_items":
     case "delete_calendar_item":
+    case "update_calendar_item":
       return "Using calendar…";
+    case "find_files":
+      return "Finding files…";
+    case "open_link":
+    case "open_app":
+    case "open_file":
+      return "Opening…";
     default:
       return "Using tool…";
   }

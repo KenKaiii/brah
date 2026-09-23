@@ -16,6 +16,8 @@ import {
   deleteTask,
   listCalendarItems,
   listTasks,
+  updateCalendarItem,
+  updateTask,
   updateTaskStatus,
 } from "./planner-store.js";
 
@@ -29,6 +31,10 @@ export async function executePlannerTool(name, args, options = {}) {
       return deleteTaskTool(args, options);
     case "update_task_status":
       return updateTaskStatusTool(args, options);
+    case "update_task":
+      return updateTaskTool(args, options);
+    case "update_calendar_item":
+      return updateCalendarItemTool(args, options);
     case "add_calendar_item":
       return addCalendarItem(args, options);
     case "list_calendar_items":
@@ -73,7 +79,7 @@ async function listTaskTool(options) {
     status: "listed",
     message:
       tasks.length > 0
-        ? "Use the task id for delete_task or update_task_status follow-ups."
+        ? "Use the task id for update_task or delete_task follow-ups."
         : "There are no tasks to delete or update.",
     tasks: tasks.map((task) => ({
       id: task.id,
@@ -99,6 +105,72 @@ async function updateTaskStatusTool(args, options) {
     return invalidArguments("status must be one of todo, in_progress, or completed.");
   }
   return updateTaskStatus(args.query, normalizeTaskStatus(args.status), options.storePath);
+}
+
+async function updateTaskTool(args, options) {
+  const validation = validateStrings(args, { query: { min: 1, max: 80 } });
+  if (!validation.ok) {
+    return validation.error;
+  }
+  const changes = collectChanges(args, {
+    name: { min: 1, max: 60, normalize: normalizeTaskName },
+    description: { min: 1, max: 120, normalize: normalizeTaskDescription },
+  });
+  if (!changes.ok) {
+    return changes.error;
+  }
+  if (args.priority !== undefined) {
+    if (!taskPriorities.includes(args.priority)) {
+      return invalidArguments("priority must be one of high, medium, or low.");
+    }
+    changes.value.priority = args.priority;
+  }
+  if (args.status !== undefined) {
+    if (!taskStatuses.includes(args.status)) {
+      return invalidArguments("status must be one of todo, in_progress, or completed.");
+    }
+    changes.value.status = args.status;
+  }
+  if (Object.keys(changes.value).length === 0) {
+    return invalidArguments("Provide at least one of name, description, priority, or status.");
+  }
+  return updateTask(args.query, changes.value, options.storePath);
+}
+
+async function updateCalendarItemTool(args, options) {
+  const validation = validateStrings(args, { query: { min: 1, max: 80 } });
+  if (!validation.ok) {
+    return validation.error;
+  }
+  const changes = collectChanges(args, {
+    title: { min: 1, max: 48, normalize: normalizeCalendarTitle },
+    description: { min: 1, max: 120, normalize: normalizeCalendarDescription },
+    date: { min: 1, max: 24, normalize: normalizeCalendarDate },
+    time: { min: 1, max: 24, normalize: normalizeCalendarTime },
+  });
+  if (!changes.ok) {
+    return changes.error;
+  }
+  if (Object.keys(changes.value).length === 0) {
+    return invalidArguments("Provide at least one of title, description, date, or time.");
+  }
+  return updateCalendarItem(args.query, changes.value, options.storePath);
+}
+
+// Validates the optional string fields that are present and normalizes them.
+function collectChanges(args, shape) {
+  const value = {};
+  for (const [key, bounds] of Object.entries(shape)) {
+    if (args[key] === undefined) {
+      continue;
+    }
+    const check = validateStrings(args, { [key]: bounds });
+    if (!check.ok) {
+      return check;
+    }
+    value[key] = bounds.normalize(args[key]);
+  }
+  return { ok: true, value };
 }
 
 async function addCalendarItem(args, options) {
@@ -133,8 +205,8 @@ async function listCalendarItemsTool(options) {
     status: "listed",
     message:
       calendarItems.length > 0
-        ? "Use the calendar item id for delete_calendar_item follow-ups."
-        : "There are no calendar items to delete.",
+        ? "Use the calendar item id for update_calendar_item or delete_calendar_item follow-ups."
+        : "There are no calendar items.",
     calendarItems: calendarItems.map((item) => ({
       id: item.id,
       title: item.title,

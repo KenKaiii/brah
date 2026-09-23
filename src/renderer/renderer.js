@@ -181,7 +181,14 @@ function formatToolToast(name, result) {
     case "delete_task":
       return status === "deleted" ? "Task deleted" : null;
     case "update_task_status":
+    case "update_task":
       return status === "updated" ? "Task updated" : null;
+    case "update_calendar_item":
+      return status === "updated" ? "Event updated" : null;
+    case "open_link":
+    case "open_app":
+    case "open_file":
+      return status === "opened" || status === "revealed" ? "Opened" : null;
     case "add_calendar_item":
       return status === "created" ? "Event added" : null;
     case "delete_calendar_item":
@@ -189,7 +196,9 @@ function formatToolToast(name, result) {
     case "web_search":
       return status === "searched" ? "Searched the web" : null;
     case "web_fetch":
-      return typeof status === "number" && status < 400 ? "Read a page" : null;
+      return status === "read" || (typeof status === "number" && status < 400)
+        ? "Read a page"
+        : null;
     case "take_screenshot":
       return status === "captured" ? "Screenshot taken" : null;
     case "write_file":
