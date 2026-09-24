@@ -3,7 +3,10 @@ import test from "node:test";
 import {
   AGENT_PERSONAS,
   buildAgentInstructions,
+  buildFixedInstructionsPreview,
   buildRealtimeInstructions,
+  CUSTOM_INSTRUCTIONS_MAX_LENGTH,
+  DEFAULT_AGENT_PROFILE,
   DEFAULT_PERSONA,
   DEFAULT_REALTIME_MODEL,
   DEFAULT_TASK_MODEL,
@@ -12,8 +15,63 @@ import {
   normalizeAgentProfile,
   REALTIME_MODELS,
   REALTIME_VOICES,
+  resetAgentProfile,
+  STATIC_VOICE_INSTRUCTIONS,
   TASK_MODELS,
 } from "../src/realtime/prompts.js";
+
+test("custom instructions are trimmed, capped, and default to empty", () => {
+  assert.equal(normalizeAgentProfile({}).customInstructions, "");
+  assert.equal(normalizeAgentProfile({ customInstructions: 42 }).customInstructions, "");
+  assert.equal(
+    normalizeAgentProfile({ customInstructions: "  Use metric units.  " }).customInstructions,
+    "Use metric units.",
+  );
+  const long = normalizeAgentProfile({ customInstructions: "x".repeat(5000) });
+  assert.equal(long.customInstructions.length, CUSTOM_INSTRUCTIONS_MAX_LENGTH);
+});
+
+test("custom instructions go in their own section after the fixed rules, framed as non-overriding", () => {
+  const instructions = buildRealtimeInstructions({
+    profile: { customInstructions: "Always answer in pirate speak." },
+    memoryContext: "- likes tea",
+  });
+  const customAt = instructions.indexOf("# User Custom Instructions");
+  assert.ok(customAt > instructions.indexOf("# Behavior"));
+  assert.ok(customAt < instructions.indexOf("# Long-Term Memory"));
+  assert.match(instructions, /Always answer in pirate speak\./);
+  assert.match(instructions, /never override the Behavior rules above/);
+});
+
+test("no custom instructions section when the field is empty", () => {
+  assert.doesNotMatch(buildAgentInstructions({}), /# User Custom Instructions/);
+});
+
+test("fixed-instructions preview is the built-in prompt plus persona, without user data", () => {
+  const preview = buildFixedInstructionsPreview("coach");
+  assert.ok(preview.startsWith(STATIC_VOICE_INSTRUCTIONS));
+  assert.match(preview, /# Persona\n/);
+  assert.equal(buildFixedInstructionsPreview("default"), STATIC_VOICE_INSTRUCTIONS);
+  assert.doesNotMatch(preview, /# Personal Context|# User Custom Instructions/);
+});
+
+test("reset restores profile defaults but keeps the chosen models", () => {
+  const reset = resetAgentProfile({
+    name: "Sam",
+    about: "Bakery",
+    goals: ["Ship"],
+    voice: "cedar",
+    persona: "coach",
+    customInstructions: "Be brief",
+    model: "gpt-realtime-2.1-mini",
+    taskModel: "gpt-6-luna",
+  });
+  assert.deepEqual(reset, {
+    ...DEFAULT_AGENT_PROFILE,
+    model: "gpt-realtime-2.1-mini",
+    taskModel: "gpt-6-luna",
+  });
+});
 
 test("task models are the GPT-6 tiers the subscription accepts, defaulting to Sol", () => {
   assert.deepEqual(Object.keys(TASK_MODELS), ["gpt-6-sol", "gpt-6-luna", "gpt-6-astra"]);
@@ -145,16 +203,17 @@ test("buildRealtimeInstructions omits the daily logs section when there are none
   assert.doesNotMatch(instructions, /# Recent Daily Logs/);
 });
 
-test("memory is presented as automatic, with no agent-facing memory tools", () => {
+test("memory is automatic, with memory tools reserved for explicit requests", () => {
   const instructions = buildAgentInstructions({});
-  // The voice agent no longer manages memory: no curator section, no save tools.
+  // No curator section: background extraction still owns routine memory.
   assert.doesNotMatch(instructions, /# Memory — You Own It/);
   assert.doesNotMatch(instructions, /# Daily Log/);
-  assert.doesNotMatch(instructions, /\bremember\b/);
-  assert.doesNotMatch(instructions, /\bdaily_log\b/);
-  // It is told memory is maintained for it in the background.
-  assert.match(instructions, /Your memory is automatic/);
-  assert.match(instructions, /do NOT have memory tools/i);
+  assert.match(instructions, /Your memory mostly runs itself/);
+  // The tools exist but are gated on the user explicitly asking.
+  assert.match(instructions, /Only reach for the memory tools when the user explicitly asks/);
+  for (const tool of ["remember", "forget", "list_facts", "daily_log", "soul_set", "soul_delete"]) {
+    assert.match(instructions, new RegExp(`\\b${tool}\\b`), tool);
+  }
 });
 
 test("base call instructions reject tool-output commands and unsupported per-action approval", () => {

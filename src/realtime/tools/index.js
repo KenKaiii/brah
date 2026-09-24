@@ -1,6 +1,7 @@
 import { executeComputerUseTool } from "./computer-use-tools.js";
 import { executeFileSystemTool } from "./filesystem-tools.js";
 import { executeLauncherTool } from "./launcher-tools.js";
+import { executeMemoryTool } from "./memory-tools.js";
 import { executePlannerTool } from "./planner-tools.js";
 import { executeScreenshotTool } from "./screenshot-tools.js";
 import { executeSessionTool } from "./session-tools.js";
@@ -41,6 +42,11 @@ export async function executeRealtimeTool(name, args = {}, options = {}) {
   const computerResult = await executeComputerUseTool(name, args, options.computerUse);
   if (computerResult) {
     return computerResult;
+  }
+
+  const memoryResult = await executeMemoryTool(name, args, options.memory);
+  if (memoryResult) {
+    return memoryResult;
   }
 
   const sessionResult = await executeSessionTool(name, args, options.session);

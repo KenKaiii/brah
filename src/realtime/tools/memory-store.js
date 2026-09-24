@@ -16,11 +16,43 @@ export const FACTS_CHAR_BUDGET = 3000;
  */
 export const FACTS_STORE_BUDGET = 15000;
 
+/** Fact categories shared by the background extractor and the memory tools. */
+export const FACT_CATEGORIES = Object.freeze([
+  "user_info",
+  "preferences",
+  "projects",
+  "people",
+  "work",
+  "notes",
+  "decisions",
+]);
+
+/** Who wrote a fact, so every entry is traceable to a trusted origin. */
+export const FACT_SOURCES = Object.freeze(["conversation", "voice", "you"]);
+
 const FACT_COLUMNS =
-  "id, category, subject, content, importance, sensitive, last_accessed_at, created_at, updated_at";
+  "id, category, subject, content, importance, sensitive, source, last_accessed_at, created_at, updated_at";
 
 export function getMemoryStorePath() {
   return getDatabasePath();
+}
+
+/**
+ * Canonical fact subject: a short snake_case key ("Coffee Preference" ->
+ * "coffee_preference"). Subjects are the dedupe key and are printed into the
+ * call instructions, so every writer (extractor and tools) must normalize them
+ * the same way; this also means a subject can never carry free-form text.
+ */
+export function normalizeFactSubject(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
 }
 
 /**
@@ -28,18 +60,19 @@ export function getMemoryStorePath() {
  * info replaces the old fact instead of duplicating it. Returns the fact id.
  */
 export function saveFact(
-  { category, subject, content, sensitive },
+  { category, subject, content, sensitive, source = "conversation" },
   storePath = getMemoryStorePath(),
 ) {
   const db = getDatabase(storePath);
+  const origin = FACT_SOURCES.includes(source) ? source : "conversation";
   const existing = db
     .prepare("SELECT id FROM facts WHERE category = ? AND subject = ?")
     .get(category, subject);
 
   if (existing) {
     db.prepare(
-      "UPDATE facts SET content = ?, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ')) WHERE id = ?",
-    ).run(content, existing.id);
+      "UPDATE facts SET content = ?, source = ?, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ')) WHERE id = ?",
+    ).run(content, origin, existing.id);
     // Only touch the flag when explicitly provided — preserve manual settings otherwise
     if (sensitive !== undefined) {
       db.prepare("UPDATE facts SET sensitive = ? WHERE id = ?").run(sensitive ? 1 : 0, existing.id);
@@ -48,8 +81,10 @@ export function saveFact(
   }
 
   const result = db
-    .prepare("INSERT INTO facts (category, subject, content, sensitive) VALUES (?, ?, ?, ?)")
-    .run(category, subject, content, sensitive ? 1 : 0);
+    .prepare(
+      "INSERT INTO facts (category, subject, content, sensitive, source) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run(category, subject, content, sensitive ? 1 : 0, origin);
   return Number(result.lastInsertRowid);
 }
 
@@ -75,6 +110,10 @@ export function updateFact(id, fields, storePath = getMemoryStorePath()) {
   if (fields.sensitive !== undefined) {
     sets.push("sensitive = ?");
     values.push(fields.sensitive ? 1 : 0);
+  }
+  if (fields.source !== undefined && FACT_SOURCES.includes(fields.source)) {
+    sets.push("source = ?");
+    values.push(fields.source);
   }
   if (sets.length === 0) {
     return false;
@@ -163,7 +202,8 @@ export function searchFacts(query, category, storePath = getMemoryStorePath()) {
  */
 function formatFactLine(fact) {
   const date = fact.updated_at?.slice(0, 10) ?? "";
-  const suffix = date ? ` _(as of ${date})_` : "";
+  const privacy = fact.sensitive ? " _(private)_" : "";
+  const suffix = `${privacy}${date ? ` _(as of ${date})_` : ""}`;
   return fact.subject
     ? `- **${fact.subject}**: ${fact.content}${suffix}`
     : `- ${fact.content}${suffix}`;
@@ -286,6 +326,7 @@ function normalizeFactRow(row) {
     content: row.content,
     importance: Number(row.importance ?? 50),
     sensitive: Boolean(row.sensitive),
+    source: FACT_SOURCES.includes(row.source) ? row.source : "conversation",
     last_accessed_at: row.last_accessed_at ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,

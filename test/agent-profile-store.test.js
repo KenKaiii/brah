@@ -81,3 +81,11 @@ test("saving an empty profile clears name and goals", async () => {
     assert.deepEqual(cleared.goals, []);
   });
 });
+
+test("custom instructions persist across reloads", async () => {
+  await withProfileDb((filePath) => {
+    saveAgentProfile({ customInstructions: "  Use metric units.  " }, filePath);
+    closeDatabase(filePath);
+    assert.equal(loadAgentProfile(filePath).customInstructions, "Use metric units.");
+  });
+});

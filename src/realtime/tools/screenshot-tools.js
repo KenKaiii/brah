@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  describeCaptureFailure,
+  getScreenAccessStatus,
+  resolveSourceImage,
+} from "./screen-capture-fallback.js";
 import { pruneSavedScreenshots } from "./screenshot-retention.js";
 
 const sourceAliasTtlMs = 5 * 60 * 1000;
@@ -21,12 +26,17 @@ export async function capturePrimaryScreenPng(options = {}) {
   if (!selected) {
     throw new Error("No primary screen source was found for capture.");
   }
-  let image = selected.thumbnail;
-  if (image.isEmpty()) {
-    throw new Error(
-      "Screen capture returned an empty image. On macOS, grant Screen Recording permission to Brah/Electron.",
-    );
+  const resolved = await resolveSourceImage(selected, { ...options, maxSize: thumbnailSize });
+  await logScreenshotEvent(options, "screenshot.primary.resolved", {
+    id: selected.id,
+    displayId: selected.display_id,
+    via: resolved.ok ? resolved.via : null,
+    ...(resolved.ok ? {} : resolved.details),
+  });
+  if (!resolved.ok) {
+    throw new Error(resolved.message);
   }
+  let image = resolved.image;
   const resizeTo = options.resizeTo;
   if (
     isRecord(resizeTo) &&
@@ -74,7 +84,7 @@ async function listScreenshotSources(args = {}, options = {}) {
       const type = source.id.startsWith("screen:") ? "screen" : "window";
       return (type === "screen" && includeScreens) || (type === "window" && includeWindows);
     });
-    const result = createSourceListResult(filtered);
+    const result = createSourceListResult(filtered, getScreenAccessStatus(options));
     await logScreenshotEvent(options, "screenshot.sources.finish", {
       returnedCount: result.sources.length,
       aliases: result.sources,
@@ -82,7 +92,7 @@ async function listScreenshotSources(args = {}, options = {}) {
     return result;
   } catch (error) {
     await logScreenshotEvent(options, "screenshot.sources.error", { error: formatError(error) });
-    return screenshotErrorResult(error);
+    return screenshotErrorResult(error, options);
   }
 }
 
@@ -120,7 +130,7 @@ async function takeScreenshot(args = {}, options = {}) {
     };
   } catch (error) {
     await logScreenshotEvent(options, "screenshot.take.error", { error: formatError(error) });
-    return screenshotErrorResult(error);
+    return screenshotErrorResult(error, options);
   }
 }
 
@@ -244,18 +254,19 @@ async function captureScreenshot(args, options) {
     thumbnailSize: selected.thumbnail.getSize?.(),
   });
 
-  if (selected.thumbnail.isEmpty()) {
-    return {
-      ok: false,
-      error: {
-        status: "error",
-        message:
-          "Screenshot capture returned an empty image. On macOS, grant Screen Recording permission to Brah/Electron and try again.",
-      },
-    };
+  const resolved = await resolveSourceImage(selected, { ...options, maxSize: thumbnailSize });
+  if (!resolved.ok) {
+    await logScreenshotEvent(options, "screenshot.capture.empty_image", resolved.details);
+    return { ok: false, error: { status: "error", message: resolved.message } };
+  }
+  if (resolved.via !== "desktopCapturer") {
+    await logScreenshotEvent(options, "screenshot.capture.fallback", {
+      via: resolved.via,
+      displayId: selected.display_id,
+    });
   }
 
-  const image = selected.thumbnail;
+  const image = resolved.image;
   const size = image.getSize();
   const imagePng = image.toPNG();
   const realtimeImage = createRealtimeImage(image);
@@ -366,7 +377,7 @@ async function getCapturerSources({ withThumbnails }, options) {
   return sources;
 }
 
-function createSourceListResult(sources) {
+function createSourceListResult(sources, screenAccess) {
   const aliases = new Map();
   const sanitizedSources = [];
   let nextAlias = 1;
@@ -398,7 +409,9 @@ function createSourceListResult(sources) {
     message:
       sanitizedSources.length > 0
         ? "Use one of these session-local source ids with take_screenshot."
-        : "No screenshot sources were available. macOS Screen Recording permission may be required.",
+        : screenAccess === "granted"
+          ? "No screenshot sources were available."
+          : "No screenshot sources were available. macOS Screen Recording permission may be required.",
     sources: sanitizedSources,
     expiresInSeconds: Math.round(sourceAliasTtlMs / 1000),
   };
@@ -612,11 +625,11 @@ function formatError(error) {
     : { message: String(error) };
 }
 
-function screenshotErrorResult(error) {
+function screenshotErrorResult(error, options = {}) {
   const message = error instanceof Error ? error.message : "Screenshot operation failed.";
   return {
     status: "error",
-    message: `${message} If this is macOS, grant Screen Recording permission to Brah/Electron and try again.`,
+    message: describeCaptureFailure(message, getScreenAccessStatus(options)),
   };
 }
 

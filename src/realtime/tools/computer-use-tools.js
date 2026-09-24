@@ -75,6 +75,8 @@ export async function runComputerUseTask(args = {}, options = {}) {
       ...validation.value,
       desktopCapturer: options.desktopCapturer,
       screen: options.screen,
+      nativeImage: options.nativeImage,
+      systemPreferences: options.systemPreferences,
       nut: options.nut,
       logger: options.logger,
     });

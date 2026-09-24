@@ -110,6 +110,41 @@ const toolPermissionMetadata = Object.freeze({
     description:
       "Let OpenAI operate a browser harness or, in OS mode, control the real machine's mouse and keyboard from screenshots.",
   },
+  remember: {
+    level: "write",
+    label: "Remember fact",
+    description: "Save a fact about you to local long-term memory.",
+  },
+  forget: {
+    level: "write",
+    label: "Forget fact",
+    description: "Delete a fact from local long-term memory.",
+  },
+  list_facts: {
+    level: "read",
+    label: "List memories",
+    description: "Read facts saved in local long-term memory.",
+  },
+  soul_set: {
+    level: "write",
+    label: "Save working note",
+    description: "Save a lesson about how you like to work together.",
+  },
+  soul_list: {
+    level: "read",
+    label: "List working notes",
+    description: "Read the saved lessons about how you like to work together.",
+  },
+  soul_delete: {
+    level: "write",
+    label: "Delete working note",
+    description: "Delete a saved lesson about how you like to work together.",
+  },
+  daily_log: {
+    level: "write",
+    label: "Log today",
+    description: "Add a line to today's local journal.",
+  },
   end_call: {
     level: "low",
     label: "End call",

@@ -152,6 +152,25 @@
               <span class="agent-label">Persona</span>
               <select id="agent-persona" class="agent-select"></select>
             </label>
+            <label class="agent-field">
+              <span class="agent-label">Custom instructions</span>
+              <textarea
+                id="agent-custom-instructions"
+                class="agent-textarea"
+                rows="5"
+                maxlength="2000"
+                placeholder="- Keep answers under two sentences&#10;- Call me out when I procrastinate&#10;- Use metric units"
+              ></textarea>
+              <span class="agent-hint">Added to every call. They can shape how I talk and act, but can't switch off my safety checks.</span>
+            </label>
+            <details class="agent-field agent-fixed">
+              <summary class="agent-label">Built-in instructions (read-only)</summary>
+              <pre id="agent-fixed-instructions" class="agent-fixed-text" tabindex="0"></pre>
+              <span class="agent-hint">Set by Brah and not editable. Your profile, custom instructions, memories and the time are added after these.</span>
+            </details>
+            <div class="settings-actions">
+              <button id="agent-reset" type="button">Reset to defaults</button>
+            </div>
           </form>
           <footer class="panel-footer">
             <span

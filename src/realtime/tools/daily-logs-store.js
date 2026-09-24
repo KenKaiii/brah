@@ -84,6 +84,22 @@ export function deleteDailyLog(id, storePath = getDailyLogsStorePath()) {
   return db.prepare("DELETE FROM daily_logs WHERE id = ?").run(id).changes > 0;
 }
 
+/** Replace a daily log's text by id (UI edit). Returns true when a row changed. */
+export function updateDailyLogContent(id, content, storePath = getDailyLogsStorePath()) {
+  const text = typeof content === "string" ? content.trim().slice(0, 4000) : "";
+  if (!Number.isInteger(id) || !text) {
+    return false;
+  }
+  const db = getDatabase(storePath);
+  return (
+    db
+      .prepare(
+        "UPDATE daily_logs SET content = ?, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ')) WHERE id = ?",
+      )
+      .run(text, id).changes > 0
+  );
+}
+
 /**
  * Prune daily logs older than the retention window. Run on startup to keep only
  * the rolling window. Returns the number of rows deleted.

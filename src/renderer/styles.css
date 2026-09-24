@@ -1073,6 +1073,61 @@ select:focus-visible,
   background: var(--danger-fill);
 }
 
+/* Edit / Cancel are plain ghosts beside the primary. */
+.selection-edit {
+  color: var(--text);
+  background: var(--raised-hover);
+}
+
+.selection-edit:hover {
+  background: var(--hairline-strong);
+}
+
+.selection-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.selection-action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* In-place editor for one memory entry (Memory tab). */
+.panel-row.is-editing {
+  border-color: var(--accent-line);
+  background: var(--raised-hover);
+}
+
+.panel-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 3px;
+}
+
+.panel-edit-input {
+  font-size: 0.74rem;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.panel-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.panel-edit-status {
+  flex: 1;
+  min-width: 0;
+  color: var(--danger);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
 .mic-picker {
   display: flex;
   align-items: center;
@@ -1229,6 +1284,34 @@ select:focus-visible,
   font-size: 0.68rem;
   line-height: 1.5;
   color: var(--text-3);
+}
+
+/* Read-only preview of the built-in instructions, collapsed by default. */
+.agent-fixed summary {
+  cursor: pointer;
+}
+
+.agent-fixed summary:focus-visible,
+.agent-fixed-text:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.agent-fixed-text {
+  max-height: 220px;
+  margin: 0;
+  padding: 9px 11px;
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  background: rgba(196, 200, 255, 0.03);
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* Settings has fewer, denser controls than the Agent form, so it gets a more

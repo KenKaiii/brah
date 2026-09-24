@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { closeDatabase } from "../src/realtime/tools/database.js";
 import { executeRealtimeTool } from "../src/realtime/tools/index.js";
 import { getRealtimeToolDefinitions } from "../src/realtime/tools/tool-schemas.js";
 
@@ -70,6 +71,7 @@ async function withToolHarness(callback) {
   try {
     await callback({
       planner: { storePath: path.join(directory, "planner", "items.json") },
+      memory: { storePath: path.join(directory, "memory", "brah.db") },
       screenshot: {
         ...createScreenshotHarness(directory),
       },
@@ -94,6 +96,7 @@ async function withToolHarness(callback) {
     });
   } finally {
     globalThis.fetch = originalFetch;
+    closeDatabase(path.join(directory, "memory", "brah.db"));
     await rm(directory, { force: true, recursive: true });
   }
 }
@@ -372,6 +375,46 @@ test("every registered Realtime tool executes a functional path", async () => {
     assert.equal(result.status, "completed");
     assert.equal(result.finalText, "Computer task finished.");
     assert.equal(result.steps, 1);
+
+    result = await executeRealtimeTool(
+      "remember",
+      { category: "preferences", subject: "coffee", content: "Takes it black" },
+      options,
+    );
+    observedNames.push("remember");
+    assert.equal(result.status, "saved");
+
+    result = await executeRealtimeTool("list_facts", { query: "black" }, options);
+    observedNames.push("list_facts");
+    assert.equal(result.count, 1);
+
+    result = await executeRealtimeTool(
+      "forget",
+      { category: "preferences", subject: "coffee" },
+      options,
+    );
+    observedNames.push("forget");
+    assert.equal(result.status, "forgotten");
+
+    result = await executeRealtimeTool(
+      "soul_set",
+      { aspect: "tone", content: "Be direct." },
+      options,
+    );
+    observedNames.push("soul_set");
+    assert.equal(result.status, "saved");
+
+    result = await executeRealtimeTool("soul_list", {}, options);
+    observedNames.push("soul_list");
+    assert.equal(result.count, 1);
+
+    result = await executeRealtimeTool("soul_delete", { aspect: "tone" }, options);
+    observedNames.push("soul_delete");
+    assert.equal(result.status, "deleted");
+
+    result = await executeRealtimeTool("daily_log", { entry: "Ran the tool suite" }, options);
+    observedNames.push("daily_log");
+    assert.equal(result.status, "logged");
 
     result = await executeRealtimeTool("cancel_computer_use", {}, options);
     observedNames.push("cancel_computer_use");

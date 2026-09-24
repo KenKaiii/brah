@@ -1,10 +1,12 @@
 import {
   AGENT_PERSONAS,
+  buildFixedInstructionsPreview,
   buildWelcomeInstructions,
   formatVoiceLabel,
   normalizeAgentProfile,
   REALTIME_MODELS,
   REALTIME_VOICES,
+  resetAgentProfile,
   TASK_MODELS,
 } from "../realtime/prompts.js";
 import { initClickSound } from "./click-sound.js";
@@ -57,6 +59,9 @@ const agentAboutInput = document.querySelector("#agent-about");
 const agentGoalsInput = document.querySelector("#agent-goals");
 const agentVoiceSelect = document.querySelector("#agent-voice");
 const agentPersonaSelect = document.querySelector("#agent-persona");
+const agentCustomInstructionsInput = document.querySelector("#agent-custom-instructions");
+const agentFixedInstructionsElement = document.querySelector("#agent-fixed-instructions");
+const agentResetButton = document.querySelector("#agent-reset");
 const settingsToggleButton = document.querySelector("#settings-toggle");
 const settingsPanelElement = document.querySelector("#settings-panel");
 const settingsBackButton = document.querySelector("#settings-back");
@@ -168,6 +173,11 @@ function handleToolEnd(name, result) {
   if (toast) {
     showCallToast(toast);
   }
+  // An explicit remember/forget/soul/log write should shape the rest of this
+  // call, same as a background extraction does.
+  if (result?.memoryChanged === true) {
+    void refreshSessionMemory();
+  }
 }
 
 // Map a finished tool + its result to a short toast, or null to stay silent.
@@ -205,6 +215,16 @@ function formatToolToast(name, result) {
       return status === "created" ? "Wrote a file" : null;
     case "edit_file":
       return status === "edited" ? "Edited a file" : null;
+    case "remember":
+      return status === "saved" || status === "updated" ? "Memory saved" : null;
+    case "forget":
+      return status === "forgotten" ? "Memory forgotten" : null;
+    case "soul_set":
+      return status === "saved" || status === "updated" ? "Noted for next time" : null;
+    case "soul_delete":
+      return status === "deleted" ? "Note removed" : null;
+    case "daily_log":
+      return status === "logged" ? "Daily log updated" : null;
     default:
       return null;
   }
@@ -734,6 +754,7 @@ async function handleAgentChoiceSelection(field, select) {
       await window.brah.setAgentProfile({ ...agentProfile, [field]: select.value }),
     );
     select.value = agentProfile[field];
+    renderFixedInstructions();
     setAgentStatus("saved", "Saved");
     // Voice and persona are baked into the minted secret; re-prime it.
     invalidatePrefetchedSecret();
@@ -812,8 +833,35 @@ function renderAgentProfile() {
   agentGoalsInput.value = agentProfile.goals.join("\n");
   agentVoiceSelect.value = agentProfile.voice;
   agentPersonaSelect.value = agentProfile.persona;
+  agentCustomInstructionsInput.value = agentProfile.customInstructions;
   settingsModelSelect.value = agentProfile.model;
   settingsTaskModelSelect.value = agentProfile.taskModel;
+  renderFixedInstructions();
+}
+
+function renderFixedInstructions() {
+  agentFixedInstructionsElement.textContent = buildFixedInstructionsPreview(agentProfile.persona);
+}
+
+async function resetAgentProfileToDefaults() {
+  const confirmed = window.confirm(
+    "Reset your name, notes, goals, voice, persona and custom instructions to the defaults? Memories and models are kept.",
+  );
+  if (!confirmed) {
+    return;
+  }
+  setAgentStatus("saving", "Resetting\u2026");
+  try {
+    agentProfile = normalizeAgentProfile(
+      await window.brah.setAgentProfile(resetAgentProfile(agentProfile)),
+    );
+    renderAgentProfile();
+    setAgentStatus("saved", "Reset to defaults");
+    invalidatePrefetchedSecret();
+    prefetchRealtimeSecret();
+  } catch (error) {
+    setAgentStatus("error", `Reset failed: ${error.message}`);
+  }
 }
 
 async function saveAgentProfile() {
@@ -823,6 +871,7 @@ async function saveAgentProfile() {
     goals: agentGoalsInput.value.split("\n"),
     voice: agentVoiceSelect.value,
     persona: agentPersonaSelect.value,
+    customInstructions: agentCustomInstructionsInput.value,
     // The models live in Settings, not the Agent form; preserve them as-is.
     model: agentProfile.model,
     taskModel: agentProfile.taskModel,
@@ -1100,6 +1149,8 @@ async function startCall() {
   callToggleButton.disabled = true;
   headerCallButton.disabled = true;
   resetTranscriptBuffer();
+  // A new call starts with no untrusted content, so memory writes are open.
+  void window.brah.noteUserTurn();
   // Close the panel inside the layout swap's hidden phase (not before it), so the
   // large idle orb never flashes at panel size between the panel hiding and the
   // call pill appearing. The panel fades out, then the call pill fades in.
@@ -1412,6 +1463,12 @@ async function handleRealtimeEvent(event, generation) {
   if (event.type === "response.output_audio_transcript.done") {
     // The assistant's spoken turn finalized — buffer it for transcript context.
     recordTranscriptTurn("assistant", event.transcript);
+    return;
+  }
+  if (event.type === "input_audio_buffer.committed") {
+    // The user finished a spoken turn (fires before the model responds, unlike
+    // the async transcript). Memory writes that follow are user-initiated.
+    void window.brah.noteUserTurn();
     return;
   }
   if (event.type === "input_audio_buffer.speech_started") {
@@ -2022,6 +2079,9 @@ agentBackButton.addEventListener("click", () => {
 agentFormElement.addEventListener("submit", (event) => {
   event.preventDefault();
   void saveAgentProfile();
+});
+agentResetButton.addEventListener("click", () => {
+  void resetAgentProfileToDefaults();
 });
 apiKeySaveButton.addEventListener("click", () => {
   void saveApiKey();

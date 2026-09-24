@@ -26,6 +26,13 @@ const expectedToolNames = [
   "analyze_screen",
   "computer_use_task",
   "cancel_computer_use",
+  "remember",
+  "forget",
+  "list_facts",
+  "soul_set",
+  "soul_list",
+  "soul_delete",
+  "daily_log",
   "end_call",
 ];
 

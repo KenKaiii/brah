@@ -6,11 +6,20 @@ const tabs = Object.freeze([
   { id: "computer", label: "Computer", category: "computer" },
 ]);
 
-// Sub-tabs shown inside the Memory tab. "facts" maps to the facts store and
-// "daily" to the daily logs store; each refreshes on its own data category.
+// Sub-tabs shown inside the Memory tab. "facts" maps to the facts store, "soul"
+// to the working-relationship notes, and "daily" to the daily logs store; each
+// refreshes on its own data category. `editKind` is the memory:update kind.
+// Where each fact came from (facts.source), shown beside its date.
+const factSourceLabels = Object.freeze({
+  conversation: "picked up in conversation",
+  voice: "you asked to remember",
+  you: "edited by you",
+});
+
 const memorySubTabs = Object.freeze([
-  { id: "facts", label: "Facts", category: "memory" },
-  { id: "daily", label: "Daily logs", category: "daily" },
+  { id: "facts", label: "Facts", category: "memory", editKind: "fact" },
+  { id: "soul", label: "Working notes", category: "soul", editKind: "soul" },
+  { id: "daily", label: "Daily logs", category: "daily", editKind: "daily" },
 ]);
 
 const MAX_ACTIVITY_ITEMS = 20;
@@ -47,11 +56,14 @@ export function createPanelController({ brah, onModeChange } = {}) {
   let selectionBar = null;
   let selectionCountElement = null;
   let selectionDoneButton = null;
+  let selectionEditButton = null;
   let animateNextRender = true;
   const selectedIds = new Set();
+  // Row id -> editable text for the memory entries currently rendered.
+  const editableText = new Map();
 
   // Tabs whose items support multi-select + delete. The Memory tab is selectable
-  // through either of its sub-tabs (facts or daily logs).
+  // through any of its sub-tabs (facts, working notes, or daily logs).
   const selectableTabs = Object.freeze(new Set(["tasks", "calendar", "screenshots", "memory"]));
 
   function renderTabs() {
@@ -118,6 +130,7 @@ export function createPanelController({ brah, onModeChange } = {}) {
 
   async function loadActiveTab({ animate = true } = {}) {
     const tab = tabs.find((item) => item.id === activeTabId) ?? tabs[0];
+    editableText.clear();
     clearSelection();
     animateNextRender = animate;
     // Skip the loading flash on silent in-place refreshes (e.g. after
@@ -135,6 +148,8 @@ export function createPanelController({ brah, onModeChange } = {}) {
       } else if (tab.id === "memory") {
         if (activeMemorySubTabId === "daily") {
           renderDailyLogs(await bridge.getDailyLogs());
+        } else if (activeMemorySubTabId === "soul") {
+          renderSoulNotes(await bridge.getSoulNotes());
         } else {
           renderMemory(await bridge.getMemoryFacts());
         }
@@ -178,7 +193,11 @@ export function createPanelController({ brah, onModeChange } = {}) {
     if (selectedIds.has(id)) {
       element.classList.add("is-selected");
     }
-    element.addEventListener("click", () => toggleSelection(id, element));
+    element.addEventListener("click", () => {
+      if (!element.classList.contains("is-editing")) {
+        toggleSelection(id, element);
+      }
+    });
     return element;
   }
 
@@ -221,9 +240,15 @@ export function createPanelController({ brah, onModeChange } = {}) {
     deleteButton.append(buildSelectionIcon("trash"), buildSelectionLabel("Delete"));
     deleteButton.addEventListener("click", () => void deleteSelection());
 
+    selectionEditButton = document.createElement("button");
+    selectionEditButton.type = "button";
+    selectionEditButton.className = "selection-action selection-edit";
+    selectionEditButton.append(buildSelectionIcon("pencil"), buildSelectionLabel("Edit"));
+    selectionEditButton.addEventListener("click", () => startEditingSelection());
+
     const actions = document.createElement("div");
     actions.className = "panel-selection-actions";
-    actions.append(selectionDoneButton, deleteButton);
+    actions.append(selectionDoneButton, selectionEditButton, deleteButton);
 
     selectionBar.append(selectionCountElement, actions);
     panelElement.append(selectionBar);
@@ -242,6 +267,9 @@ export function createPanelController({ brah, onModeChange } = {}) {
     }
     selectionCountElement.textContent = `${count} selected`;
     selectionDoneButton.hidden = activeTabId !== "tasks";
+    // Memory entries are edited one at a time, in place.
+    selectionEditButton.hidden =
+      activeTabId !== "memory" || count !== 1 || !editableText.has([...selectedIds][0]);
     bar.hidden = false;
     requestAnimationFrame(() => bar.classList.add("is-visible"));
   }
@@ -260,6 +288,8 @@ export function createPanelController({ brah, onModeChange } = {}) {
     } else if (activeTabId === "memory") {
       if (activeMemorySubTabId === "daily") {
         await bridge.deleteDailyLogs(ids);
+      } else if (activeMemorySubTabId === "soul") {
+        await bridge.deleteSoulNotes(ids);
       } else {
         await bridge.deleteMemoryFacts(ids);
       }
@@ -274,6 +304,83 @@ export function createPanelController({ brah, onModeChange } = {}) {
     }
     await bridge.completePlannerTasks(ids);
     await loadActiveTab({ animate: false });
+  }
+
+  // Swap the selected memory row's text for an editor. Only the text is
+  // editable; the category/subject/date stay as they are.
+  function startEditingSelection() {
+    const id = [...selectedIds][0];
+    const original = editableText.get(id);
+    const row = [...bodyElement.querySelectorAll("[data-select-id]")].find(
+      (element) => element.dataset.selectId === id,
+    );
+    const editKind = memorySubTabs.find((subTab) => subTab.id === activeMemorySubTabId)?.editKind;
+    if (!row || original === undefined || !editKind) {
+      return;
+    }
+    clearSelection();
+    row.classList.remove("is-selected", "is-selectable");
+    row.classList.add("is-editing");
+
+    const editor = document.createElement("div");
+    editor.className = "panel-edit";
+    editor.addEventListener("click", (event) => event.stopPropagation());
+    const input = document.createElement("textarea");
+    input.className = "agent-textarea panel-edit-input";
+    input.value = original;
+    input.rows = Math.min(8, Math.max(2, original.split("\n").length));
+    input.maxLength = editKind === "daily" ? 4000 : 300;
+    input.setAttribute("aria-label", "Edit memory");
+    const status = document.createElement("span");
+    status.className = "panel-edit-status";
+    status.setAttribute("role", "status");
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "selection-action selection-edit";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", () => void loadActiveTab({ animate: false }));
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "selection-action selection-done";
+    save.textContent = "Save";
+    save.addEventListener("click", async () => {
+      const value = input.value.trim();
+      if (!value) {
+        status.textContent = "Can't be empty. Use Delete to remove it.";
+        return;
+      }
+      save.disabled = true;
+      try {
+        const result = await bridge.updateMemoryEntry(editKind, Number(id), value);
+        if (result?.status !== "updated") {
+          throw new Error(result?.message ?? "It may have been deleted.");
+        }
+        await loadActiveTab({ animate: false });
+      } catch (error) {
+        save.disabled = false;
+        status.textContent = `Couldn't save. ${error instanceof Error ? error.message : ""}`.trim();
+      }
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancel.click();
+      } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        save.click();
+      }
+    });
+    const actions = document.createElement("div");
+    actions.className = "panel-edit-actions";
+    actions.append(status, cancel, save);
+    editor.append(input, actions);
+
+    for (const child of [...row.querySelectorAll(".panel-row-subtext")]) {
+      child.remove();
+    }
+    row.querySelector(".panel-row-title")?.after(editor);
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
   }
 
   function buildSelectionLabel(text) {
@@ -291,7 +398,9 @@ export function createPanelController({ brah, onModeChange } = {}) {
     svg.setAttribute("fill", "none");
     svg.setAttribute("aria-hidden", "true");
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    if (kind === "trash") {
+    if (kind === "pencil") {
+      path.setAttribute("d", "M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4");
+    } else if (kind === "trash") {
       path.setAttribute(
         "d",
         "M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12",
@@ -502,14 +611,52 @@ export function createPanelController({ brah, onModeChange } = {}) {
       content.textContent = fact.content;
       row.append(content);
     }
-    const metaParts = [formatTime(fact.updated_at)].filter(Boolean);
+    editableText.set(String(fact.id), String(fact.content ?? ""));
+    // Provenance: every entry shows who wrote it, so it can be audited.
+    const metaParts = [formatTime(fact.updated_at), factSourceLabels[fact.source]].filter(Boolean);
     if (fact.sensitive) {
-      metaParts.push("sensitive");
+      metaParts.push("private");
     }
     if (metaParts.length > 0) {
       row.append(buildMeta(metaParts.join(" · ")));
     }
     return makeSelectable(row, String(fact.id));
+  }
+
+  // Working notes: lessons about how the user wants Brah to work with them,
+  // one per aspect, sorted by aspect.
+  function renderSoulNotes(notes) {
+    const list = Array.isArray(notes) ? notes : [];
+    if (list.length === 0) {
+      mountBody(
+        buildEmptyState(
+          "No working notes yet",
+          "Correct how Brah talks or works with you and he'll note it here.",
+        ),
+      );
+      setFooter("No notes");
+      return;
+    }
+    mountBody(...list.map((note) => buildSoulRow(note)));
+    setFooter(`${list.length} ${list.length === 1 ? "note" : "notes"}`);
+  }
+
+  function buildSoulRow(note) {
+    const row = document.createElement("article");
+    row.className = "panel-row panel-row-block";
+    const title = document.createElement("div");
+    title.className = "panel-row-title";
+    title.textContent = String(note.aspect ?? "note").replaceAll("_", " ");
+    const content = document.createElement("p");
+    content.className = "panel-row-subtext";
+    content.textContent = note.content ?? "";
+    row.append(title, content);
+    const updated = formatTime(note.updated_at);
+    if (updated) {
+      row.append(buildMeta(updated));
+    }
+    editableText.set(String(note.id), String(note.content ?? ""));
+    return makeSelectable(row, String(note.id));
   }
 
   // Daily logs render the pocket-agent way: one card per day (most recent first),
@@ -545,6 +692,7 @@ export function createPanelController({ brah, onModeChange } = {}) {
       line.textContent = entry;
       row.append(line);
     }
+    editableText.set(String(log.id), String(log.content ?? ""));
     return makeSelectable(row, String(log.id));
   }
 

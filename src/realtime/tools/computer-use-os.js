@@ -98,6 +98,8 @@ export async function createOsComputerTarget(options = {}) {
       const capture = await capturePrimaryScreenPng({
         desktopCapturer: options.desktopCapturer,
         screen: options.screen,
+        nativeImage: options.nativeImage,
+        systemPreferences: options.systemPreferences,
         logger: options.logger,
         resizeTo: { width: geometry.logicalWidth, height: geometry.logicalHeight },
       });
