@@ -24,6 +24,7 @@ import {
 } from "./realtime-response-queue.js";
 import { createRealtimeToolHandler } from "./realtime-tool-handler.js";
 import { createWaitingSound } from "./waiting-sound.js";
+import { createWaitingSoundPolicy } from "./waiting-sound-policy.js";
 
 // Readable badge text for the OS permission states from os-permissions.js.
 const permissionStatusLabels = Object.freeze({
@@ -132,6 +133,7 @@ let activeToolCount = 0;
 const playbackTracker = createRealtimePlaybackTracker();
 const responseCoordinator = createRealtimeResponseCoordinator();
 const waitingSound = createWaitingSound();
+const waitingSoundPolicy = createWaitingSoundPolicy();
 let callTimerInterval = null;
 let callStartedAt = 0;
 let isCallActive = false;
@@ -159,8 +161,15 @@ function handleToolStart(name) {
   // Computer use has its own on-screen indicator (and can run for a long time),
   // so only fill silence with the waiting ambience for normal quick tool calls.
   if (!stoppableTools.has(name)) {
-    waitingSound.start();
+    applyWaitingSound(
+      waitingSoundPolicy.toolStarted({ isAudioPlaying: playbackTracker.state.isAudioPlaying }),
+    );
   }
+}
+
+function applyWaitingSound(action) {
+  if (action === "start") waitingSound.start();
+  if (action === "stop") waitingSound.stop();
 }
 
 function handleToolEnd(name, result) {
@@ -168,7 +177,10 @@ function handleToolEnd(name, result) {
   hideToolActivity(name);
   // The waiting sound is intentionally NOT stopped here: tool execution finishes
   // long before the agent speaks again (local tools run in ~20ms), so the sound
-  // keeps filling the silence until an audio/turn-end event stops it.
+  // keeps filling the silence until the policy sees the reply begin.
+  if (!stoppableTools.has(name)) {
+    applyWaitingSound(waitingSoundPolicy.toolEnded());
+  }
   const toast = formatToolToast(name, result);
   if (toast) {
     showCallToast(toast);
@@ -1378,6 +1390,7 @@ async function stopCall() {
     playbackTracker.reset();
     responseCoordinator.reset();
     waitingSound.reset();
+    waitingSoundPolicy.reset();
 
     // A computer-use task can outlive its WebRTC tool reply. Ending the call
     // must also stop the underlying task, not only discard its late output.
@@ -1420,6 +1433,7 @@ async function handleRealtimeEvent(event, generation) {
   playbackTracker.observe(event);
   hangupCompletion?.observe(event.type);
   if (generation !== callGeneration) return;
+  applyWaitingSound(waitingSoundPolicy.observe(event));
   // The welcome greeting finished playing through the speakers — safe to listen.
   if (
     (event.type === "output_audio_buffer.stopped" ||
@@ -1475,7 +1489,6 @@ async function handleRealtimeEvent(event, generation) {
     // The user started talking: cut off any assistant audio immediately rather than
     // waiting for the server VAD round-trip, then return to listening.
     interruptAssistantPlayback();
-    waitingSound.stop();
     setCallStatus("Listening");
     setMode("listening");
     return;
@@ -1488,8 +1501,7 @@ async function handleRealtimeEvent(event, generation) {
     // assistant audio rides the media track and response.output_audio.delta never
     // fires; output_audio_buffer.started is the real "now speaking" signal (the
     // delta is kept too for any WebSocket fallback). This is what actually stops
-    // the waiting ambience after a tool call.
-    waitingSound.stop();
+    // the waiting ambience after a tool call (via the policy, above).
     setCallStatus("Speaking");
     setMode("speaking");
     return;
