@@ -676,6 +676,12 @@ app.whenReady().then(() => {
     void runRealtimeProbe();
     return;
   }
+  // Packaged builds get the icon from the bundle; `npm start` runs the stock
+  // Electron binary, so set the Dock icon from the build source instead.
+  if (isDevelopment && process.platform === "darwin") {
+    const devIcon = nativeImage.createFromPath(path.join(__dirname, "..", "build", "icon.png"));
+    if (!devIcon.isEmpty()) app.dock?.setIcon(devIcon);
+  }
   initializeDataStore();
   void startDiagnosticSession();
   wireUpdateEvents();

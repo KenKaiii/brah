@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- Source for the Brah app icon. Rendered to build/icon.png by scripts/make-icon.mjs.
+     Plain white on near-black. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1024px;
+        height: 1024px;
+        background: transparent;
+      }
+
+      /* macOS icon grid: 824px body centred on a 1024px canvas. */
+      .tile {
+        position: absolute;
+        left: 100px;
+        top: 100px;
+        width: 824px;
+        height: 824px;
+        border-radius: 185px;
+        overflow: hidden;
+        background: #0a0a0a;
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+      }
+
+      .letter {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Inter", sans-serif;
+        font-weight: 600;
+        font-size: 700px;
+        line-height: 1;
+        letter-spacing: 0;
+        /* Nudge up: a lowercase b has no descender, so optical centre sits high. */
+        padding-bottom: 52px;
+        padding-left: 6px;
+        color: #ffffff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="tile">
+      <div class="letter">b</div>
+    </div>
+  </body>
+</html>
