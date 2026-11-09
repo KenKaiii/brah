@@ -7,12 +7,15 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="https://youtube.com/@kenkaidoesai"><img src="https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="YouTube"></a>
-  <a href="https://skool.com/kenkai"><img src="https://img.shields.io/badge/Skool-Community-7C3AED?style=for-the-badge" alt="Skool"></a>
+  <a href="https://www.skool.com/raid"><img src="https://img.shields.io/badge/Skool-Free%20community-7C3AED?style=for-the-badge" alt="Free Skool community"></a>
 </p>
 
 **Brah** is a desktop voice assistant that lives in the corner of your screen. Talk to it and it listens, looks at your screen, controls your computer, and gets things done, all in realtime through the OpenAI Realtime API.
 
 It's not just a chatbot. It takes screenshots and reasons about what's on screen, drives your mouse and keyboard, automates the browser, and manages your tasks and calendar, hands-free.
+
+> [!TIP]
+> **Want to build your own apps with AI?** A free 7-day build challenge and 20+ step-by-step projects are in my free community: **[skool.com/raid](https://www.skool.com/raid)**
 
 ---
 
@@ -81,7 +84,7 @@ Code signing is auto-discovered from your keychain (or `CSC_*` env vars); with n
 ## 👥 Community
 
 - [YouTube @kenkaidoesai](https://youtube.com/@kenkaidoesai) - tutorials and demos
-- [Skool community](https://skool.com/kenkai) - come hang out
+- [Free Skool community](https://www.skool.com/raid): a 7-day build challenge and 20+ step-by-step projects
 
 ---
 
